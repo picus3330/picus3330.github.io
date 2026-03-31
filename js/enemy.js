@@ -1,378 +1,239 @@
 /* ============================================================
-   NEXUS STRIKE — Enemy AI System
-   State-based AI, multiple enemy types, behavior patterns
+   NEXUS STRIKE — Enemy AI (OPTIMIZED)
+   
+   PERF: Shared material cache per type, simpler geometry,
+   squared distance checks (no sqrt), reduced per-frame alloc.
    ============================================================ */
 
 const ENEMY_STATES = { IDLE: 0, PATROL: 1, CHASE: 2, ATTACK: 3, STUNNED: 4 };
 
+// Material cache — one material per enemy type, reused by all instances
+const _enemyMats = {};
+function _getEnemyMat(color) {
+    if (_enemyMats[color]) return _enemyMats[color];
+    _enemyMats[color] = new THREE.MeshStandardMaterial({
+        color, roughness: .3, metalness: .7, emissive: color, emissiveIntensity: .2
+    });
+    return _enemyMats[color];
+}
+
+// Shared geometries
+const _enemyGeoms = {
+    grunt:   new THREE.DodecahedronGeometry(.5, 0),
+    charger: new THREE.ConeGeometry(.5, 1.2, 5),
+    sniper:  new THREE.CylinderGeometry(.2, .35, 1.4, 6),
+    tank:    new THREE.BoxGeometry(1, .8, 1)
+};
+
 class Enemy {
-    constructor(scene, position, type = 'grunt') {
+    constructor(scene, position, type) {
         this.scene = scene;
-        this.type = type;
+        this.type = type || 'grunt';
         this.alive = true;
         this.state = ENEMY_STATES.PATROL;
         this.stateTimer = 0;
-        this.radius = 0.6;
+        this.radius = .6;
 
-        // Type-specific stats
-        const stats = Enemy.TYPES[type] || Enemy.TYPES.grunt;
-        this.maxHealth = stats.health;
-        this.health = stats.health;
-        this.speed = stats.speed;
-        this.damage = stats.damage;
-        this.attackRange = stats.attackRange;
-        this.attackCooldown = stats.attackCooldown;
-        this.detectionRange = stats.detectionRange;
-        this.scoreValue = stats.scoreValue;
-        this.color = stats.color;
-        this.scale = stats.scale || 1;
+        const s = Enemy.TYPES[this.type] || Enemy.TYPES.grunt;
+        this.maxHealth = s.health; this.health = s.health;
+        this.speed = s.speed; this.damage = s.damage;
+        this.attackRange = s.attackRange; this.attackCooldown = s.attackCooldown;
+        this.detectionRange = s.detectionRange; this.scoreValue = s.scoreValue;
+        this.color = s.color; this.scale = s.scale || 1;
 
-        this.attackTimer = 0;
-        this.stunTimer = 0;
-        this.patrolTarget = null;
-        this.hitFlashTimer = 0;
+        this.attackTimer = 0; this.stunTimer = 0;
+        this.patrolTarget = null; this.hitFlashTimer = 0;
 
-        this._createMesh(position);
+        this._buildMesh(position);
+        // Reusable vectors to avoid per-frame allocation
+        this._dir = new THREE.Vector3();
+        this._newPos = new THREE.Vector3();
     }
 
     static TYPES = {
-        grunt: {
-            health: 40, speed: 4, damage: 10, attackRange: 12,
-            attackCooldown: 1.5, detectionRange: 16, scoreValue: 100,
-            color: 0xff2244, scale: 1
-        },
-        charger: {
-            health: 60, speed: 6.5, damage: 20, attackRange: 2.5,
-            attackCooldown: 2.0, detectionRange: 14, scoreValue: 150,
-            color: 0xff8800, scale: 1.2
-        },
-        sniper: {
-            health: 25, speed: 2.5, damage: 25, attackRange: 22,
-            attackCooldown: 2.5, detectionRange: 24, scoreValue: 200,
-            color: 0xaa00ff, scale: 0.9
-        },
-        tank: {
-            health: 120, speed: 2.0, damage: 15, attackRange: 8,
-            attackCooldown: 1.0, detectionRange: 12, scoreValue: 300,
-            color: 0x00ff88, scale: 1.5
-        }
+        grunt:   { health:40,  speed:4,   damage:10, attackRange:12, attackCooldown:1.5, detectionRange:16, scoreValue:100, color:0xff2244, scale:1 },
+        charger: { health:60,  speed:6.5, damage:20, attackRange:2.5,attackCooldown:2,   detectionRange:14, scoreValue:150, color:0xff8800, scale:1.2 },
+        sniper:  { health:25,  speed:2.5, damage:25, attackRange:22, attackCooldown:2.5, detectionRange:24, scoreValue:200, color:0xaa00ff, scale:.9 },
+        tank:    { health:120, speed:2,   damage:15, attackRange:8,  attackCooldown:1,   detectionRange:12, scoreValue:300, color:0x00ff88, scale:1.5 }
     };
 
-    _createMesh(position) {
-        // Body — unique shape per type
+    _buildMesh(position) {
         const group = new THREE.Group();
+        const mat = _getEnemyMat(this.color);
+        this.bodyMaterial = mat;
 
-        let bodyGeom, bodyMat;
-        bodyMat = new THREE.MeshStandardMaterial({
-            color: this.color,
-            roughness: 0.3,
-            metalness: 0.7,
-            emissive: this.color,
-            emissiveIntensity: 0.2
-        });
+        const geom = _enemyGeoms[this.type] || _enemyGeoms.grunt;
+        const body = new THREE.Mesh(geom, mat);
+        if (this.type === 'charger') { body.rotation.x = Math.PI/2; body.position.y = .6; }
+        else if (this.type === 'tank') { body.position.y = .5; }
+        else { body.position.y = .6; }
+        group.add(body);
 
-        switch (this.type) {
-            case 'charger':
-                // Wedge shape
-                bodyGeom = new THREE.ConeGeometry(0.5, 1.2, 5);
-                const body = new THREE.Mesh(bodyGeom, bodyMat);
-                body.rotation.x = Math.PI / 2;
-                body.position.y = 0.6;
-                group.add(body);
-                break;
-
-            case 'sniper':
-                // Tall thin shape
-                bodyGeom = new THREE.CylinderGeometry(0.2, 0.35, 1.4, 6);
-                const sniperBody = new THREE.Mesh(bodyGeom, bodyMat);
-                sniperBody.position.y = 0.7;
-                group.add(sniperBody);
-                // Eye
-                const eyeGeom = new THREE.SphereGeometry(0.15, 8, 8);
-                const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-                const eye = new THREE.Mesh(eyeGeom, eyeMat);
-                eye.position.set(0, 1.2, 0.2);
-                group.add(eye);
-                break;
-
-            case 'tank':
-                // Wide boxy shape
-                bodyGeom = new THREE.BoxGeometry(1.0, 0.8, 1.0);
-                const tankBody = new THREE.Mesh(bodyGeom, bodyMat);
-                tankBody.position.y = 0.5;
-                group.add(tankBody);
-                // Top turret
-                const turretGeom = new THREE.CylinderGeometry(0.3, 0.3, 0.4, 8);
-                const turret = new THREE.Mesh(turretGeom, bodyMat);
-                turret.position.y = 1.1;
-                group.add(turret);
-                break;
-
-            default: // grunt
-                bodyGeom = new THREE.DodecahedronGeometry(0.5, 0);
-                const gruntBody = new THREE.Mesh(bodyGeom, bodyMat);
-                gruntBody.position.y = 0.6;
-                group.add(gruntBody);
-                // Spikes
-                for (let i = 0; i < 3; i++) {
-                    const spike = new THREE.Mesh(
-                        new THREE.ConeGeometry(0.1, 0.3, 4),
-                        bodyMat
-                    );
-                    const angle = (i / 3) * Math.PI * 2;
-                    spike.position.set(Math.cos(angle) * 0.4, 0.6, Math.sin(angle) * 0.4);
-                    spike.lookAt(new THREE.Vector3(
-                        Math.cos(angle) * 2, 0.6, Math.sin(angle) * 2
-                    ));
-                    group.add(spike);
-                }
-        }
-
-        // Shadow circle on ground
-        const shadowGeom = new THREE.CircleGeometry(0.4 * this.scale, 16);
-        const shadowMat = new THREE.MeshBasicMaterial({
-            color: 0x000000, transparent: true, opacity: 0.3
-        });
-        const shadow = new THREE.Mesh(shadowGeom, shadowMat);
-        shadow.rotation.x = -Math.PI / 2;
-        shadow.position.y = 0.02;
+        // Simple shadow disc
+        const shadow = new THREE.Mesh(
+            new THREE.CircleGeometry(.4 * this.scale, 8),
+            new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: .25 })
+        );
+        shadow.rotation.x = -Math.PI / 2; shadow.position.y = .02;
         group.add(shadow);
 
         group.scale.setScalar(this.scale);
-        group.position.copy(position);
-        group.position.y = 0;
-
+        group.position.copy(position); group.position.y = 0;
         this.mesh = group;
-        this.bodyMaterial = bodyMat;
-        this.scene.add(this.mesh);
+        scene.add(group);
     }
 
-    update(dt, playerPosition, combatSystem, obstacles) {
+    update(dt, playerPos, combat, obstacles) {
         if (!this.alive) return;
 
         this.stateTimer += dt;
         this.attackTimer += dt;
-        this.hitFlashTimer -= dt;
 
-        // Hit flash feedback
-        if (this.hitFlashTimer > 0) {
-            this.bodyMaterial.emissiveIntensity = 1.5;
-        } else {
-            this.bodyMaterial.emissiveIntensity = 0.2;
-        }
+        // Hit flash
+        if (this.hitFlashTimer > 0) { this.hitFlashTimer -= dt; this.bodyMaterial.emissiveIntensity = 1.5; }
+        else { this.bodyMaterial.emissiveIntensity = .2; }
 
-        // Stun state
         if (this.state === ENEMY_STATES.STUNNED) {
             this.stunTimer -= dt;
-            if (this.stunTimer <= 0) {
-                this.state = ENEMY_STATES.CHASE;
-                this.stateTimer = 0;
-            }
+            if (this.stunTimer <= 0) { this.state = ENEMY_STATES.CHASE; this.stateTimer = 0; }
             return;
         }
 
-        const distToPlayer = this.mesh.position.distanceTo(playerPosition);
-        const dirToPlayer = new THREE.Vector3()
-            .subVectors(playerPosition, this.mesh.position)
-            .setY(0)
-            .normalize();
+        // Squared distance (avoid sqrt)
+        const dx = playerPos.x - this.mesh.position.x;
+        const dz = playerPos.z - this.mesh.position.z;
+        const distSq = dx * dx + dz * dz;
+        this._dir.set(dx, 0, dz);
+        const dist = Math.sqrt(distSq); // only one sqrt per enemy per frame
+        if (dist > .01) { this._dir.x /= dist; this._dir.z /= dist; }
 
-        // State machine
+        const detSq = this.detectionRange * this.detectionRange;
+        const atkSq = this.attackRange * this.attackRange;
+
         switch (this.state) {
             case ENEMY_STATES.IDLE:
-                if (distToPlayer < this.detectionRange) {
-                    this.state = ENEMY_STATES.CHASE;
-                    this.stateTimer = 0;
-                } else if (this.stateTimer > 2) {
-                    this.state = ENEMY_STATES.PATROL;
-                    this.stateTimer = 0;
-                    this._pickPatrolTarget();
-                }
+                if (distSq < detSq) { this.state = ENEMY_STATES.CHASE; this.stateTimer = 0; }
+                else if (this.stateTimer > 2) { this.state = ENEMY_STATES.PATROL; this.stateTimer = 0; this._pickPatrol(); }
                 break;
-
             case ENEMY_STATES.PATROL:
-                if (distToPlayer < this.detectionRange) {
-                    this.state = ENEMY_STATES.CHASE;
-                    this.stateTimer = 0;
-                } else {
+                if (distSq < detSq) { this.state = ENEMY_STATES.CHASE; this.stateTimer = 0; }
+                else {
                     this._moveToward(this.patrolTarget, dt, obstacles);
-                    if (!this.patrolTarget || this.mesh.position.distanceTo(this.patrolTarget) < 1) {
-                        this.state = ENEMY_STATES.IDLE;
-                        this.stateTimer = 0;
-                    }
+                    if (!this.patrolTarget || this._distSqTo(this.patrolTarget) < 1) { this.state = ENEMY_STATES.IDLE; this.stateTimer = 0; }
                 }
                 break;
-
             case ENEMY_STATES.CHASE:
-                if (distToPlayer > this.detectionRange * 1.5) {
-                    this.state = ENEMY_STATES.PATROL;
-                    this.stateTimer = 0;
-                    this._pickPatrolTarget();
-                } else if (distToPlayer <= this.attackRange) {
-                    this.state = ENEMY_STATES.ATTACK;
-                    this.stateTimer = 0;
-                } else {
-                    this._moveToward(playerPosition, dt, obstacles);
-                    this._faceDirection(dirToPlayer, dt);
-                }
+                if (distSq > detSq * 2.25) { this.state = ENEMY_STATES.PATROL; this.stateTimer = 0; this._pickPatrol(); }
+                else if (distSq <= atkSq) { this.state = ENEMY_STATES.ATTACK; this.stateTimer = 0; }
+                else { this._moveToward(playerPos, dt, obstacles); this._face(this._dir, dt); }
                 break;
-
             case ENEMY_STATES.ATTACK:
-                if (distToPlayer > this.attackRange * 1.2) {
-                    this.state = ENEMY_STATES.CHASE;
-                    this.stateTimer = 0;
-                } else {
-                    this._faceDirection(dirToPlayer, dt);
-
-                    // Type-specific attack behavior
-                    if (this.type === 'charger') {
-                        // Charge at player
-                        this._moveToward(playerPosition, dt, obstacles, 1.5);
-                    } else if (distToPlayer > this.attackRange * 0.4 && this.type !== 'sniper') {
-                        // Strafe while attacking
-                        const strafeDir = new THREE.Vector3(-dirToPlayer.z, 0, dirToPlayer.x);
-                        if (Math.sin(this.stateTimer * 2) > 0) strafeDir.negate();
-                        this._moveToward(
-                            this.mesh.position.clone().add(strafeDir.multiplyScalar(3)),
-                            dt, obstacles, 0.5
-                        );
-                    }
-
-                    // Fire
+                if (distSq > atkSq * 1.44) { this.state = ENEMY_STATES.CHASE; this.stateTimer = 0; }
+                else {
+                    this._face(this._dir, dt);
+                    if (this.type === 'charger') this._moveToward(playerPos, dt, obstacles, 1.5);
                     if (this.attackTimer >= this.attackCooldown) {
-                        this._attack(dirToPlayer, combatSystem);
+                        this._attack(this._dir, combat);
                         this.attackTimer = 0;
                     }
                 }
                 break;
         }
 
-        // Gentle hover animation
-        const baseY = 0;
-        this.mesh.position.y = baseY + Math.sin(Date.now() * 0.003 + this.mesh.id) * 0.05;
+        // Gentle hover
+        this.mesh.position.y = Math.sin(Date.now() * .003 + this.mesh.id) * .04;
     }
 
-    _moveToward(target, dt, obstacles, speedMult = 1) {
+    _moveToward(target, dt, obstacles, mult) {
         if (!target) return;
-        const dir = new THREE.Vector3()
-            .subVectors(target, this.mesh.position)
-            .setY(0);
-
-        if (dir.length() < 0.3) return;
-        dir.normalize();
-
-        const movement = dir.multiplyScalar(this.speed * speedMult * dt);
-        const newPos = this.mesh.position.clone().add(movement);
-
-        // Arena bounds
-        newPos.x = Math.max(-24, Math.min(24, newPos.x));
-        newPos.z = Math.max(-24, Math.min(24, newPos.z));
-
-        // Simple obstacle avoidance
-        let blocked = false;
-        for (const obs of obstacles) {
-            const box = obs.userData.bounds;
-            if (!box) continue;
-            const margin = this.radius * this.scale + 0.3;
-            if (newPos.x > box.min.x - margin && newPos.x < box.max.x + margin &&
-                newPos.z > box.min.z - margin && newPos.z < box.max.z + margin) {
-                blocked = true;
-                // Try to slide around
-                const slideX = this.mesh.position.clone();
-                slideX.x += movement.x;
-                const slideZ = this.mesh.position.clone();
-                slideZ.z += movement.z;
-
-                if (!(slideX.x > box.min.x - margin && slideX.x < box.max.x + margin &&
-                      slideX.z > box.min.z - margin && slideX.z < box.max.z + margin)) {
-                    newPos.copy(slideX);
-                    blocked = false;
-                } else if (!(slideZ.x > box.min.x - margin && slideZ.x < box.max.x + margin &&
-                             slideZ.z > box.min.z - margin && slideZ.z < box.max.z + margin)) {
-                    newPos.copy(slideZ);
-                    blocked = false;
+        const mx = target.x - this.mesh.position.x;
+        const mz = target.z - this.mesh.position.z;
+        const ml = Math.sqrt(mx*mx + mz*mz);
+        if (ml < .3) return;
+        const s = this.speed * (mult || 1) * dt / ml;
+        this._newPos.x = this.mesh.position.x + mx * s;
+        this._newPos.z = this.mesh.position.z + mz * s;
+        // Clamp
+        this._newPos.x = Math.max(-24, Math.min(24, this._newPos.x));
+        this._newPos.z = Math.max(-24, Math.min(24, this._newPos.z));
+        // Obstacle avoidance
+        const margin = this.radius * this.scale + .3;
+        for (let i = 0; i < obstacles.length; i++) {
+            const b = obstacles[i].userData.bounds;
+            if (!b) continue;
+            if (this._newPos.x > b.min.x - margin && this._newPos.x < b.max.x + margin &&
+                this._newPos.z > b.min.z - margin && this._newPos.z < b.max.z + margin) {
+                // Try slide X only
+                const sx = this.mesh.position.x + mx * s;
+                if (!(sx > b.min.x - margin && sx < b.max.x + margin &&
+                      this.mesh.position.z > b.min.z - margin && this.mesh.position.z < b.max.z + margin)) {
+                    this._newPos.x = sx; this._newPos.z = this.mesh.position.z;
+                } else {
+                    const sz = this.mesh.position.z + mz * s;
+                    if (!(this.mesh.position.x > b.min.x - margin && this.mesh.position.x < b.max.x + margin &&
+                          sz > b.min.z - margin && sz < b.max.z + margin)) {
+                        this._newPos.x = this.mesh.position.x; this._newPos.z = sz;
+                    } else return; // fully blocked
                 }
                 break;
             }
         }
-
-        if (!blocked) {
-            this.mesh.position.x = newPos.x;
-            this.mesh.position.z = newPos.z;
-        }
-
-        this._faceDirection(dir.normalize(), dt);
+        this.mesh.position.x = this._newPos.x;
+        this.mesh.position.z = this._newPos.z;
+        this._face({ x: mx / ml, z: mz / ml }, dt);
     }
 
-    _faceDirection(dir, dt) {
-        const targetAngle = Math.atan2(dir.x, dir.z);
-        const currentAngle = this.mesh.rotation.y;
-        let diff = targetAngle - currentAngle;
-        // Normalize angle
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
+    _face(dir, dt) {
+        const target = Math.atan2(dir.x, dir.z);
+        let diff = target - this.mesh.rotation.y;
+        if (diff > Math.PI) diff -= Math.PI * 2;
+        if (diff < -Math.PI) diff += Math.PI * 2;
         this.mesh.rotation.y += diff * Math.min(1, 8 * dt);
     }
 
-    _attack(direction, combatSystem) {
-        if (!combatSystem) return;
-        const spawnPos = this.mesh.position.clone();
-        spawnPos.y = 0.6 * this.scale;
-        spawnPos.addScaledVector(direction, 0.8);
-
-        combatSystem.shoot(spawnPos, direction, {
-            isPlayer: false,
-            damage: this.damage,
-            speed: this.type === 'sniper' ? 22 : 16,
+    _attack(dir, combat) {
+        if (!combat) return;
+        const sp = this.mesh.position.clone();
+        sp.y = .6 * this.scale;
+        sp.x += dir.x * .8; sp.z += dir.z * .8;
+        combat.shoot(sp, dir, {
+            isPlayer: false, damage: this.damage,
+            speed: this.type === 'sniper' ? 20 : 14,
             lifetime: 2.5
         });
     }
 
-    _pickPatrolTarget() {
-        const range = 8;
+    _pickPatrol() {
         this.patrolTarget = new THREE.Vector3(
-            this.mesh.position.x + (Math.random() - 0.5) * range * 2,
+            Math.max(-22, Math.min(22, this.mesh.position.x + (Math.random() - .5) * 16)),
             0,
-            this.mesh.position.z + (Math.random() - 0.5) * range * 2
+            Math.max(-22, Math.min(22, this.mesh.position.z + (Math.random() - .5) * 16))
         );
-        // Clamp to arena
-        this.patrolTarget.x = Math.max(-22, Math.min(22, this.patrolTarget.x));
-        this.patrolTarget.z = Math.max(-22, Math.min(22, this.patrolTarget.z));
+    }
+
+    _distSqTo(v) {
+        const dx = this.mesh.position.x - v.x, dz = this.mesh.position.z - v.z;
+        return dx*dx + dz*dz;
     }
 
     takeDamage(amount) {
         if (!this.alive) return;
         this.health -= amount;
-        this.hitFlashTimer = 0.1;
-
-        // Knockback stun
+        this.hitFlashTimer = .1;
         this.state = ENEMY_STATES.STUNNED;
-        this.stunTimer = 0.15;
-
-        if (this.health <= 0) {
-            this.die();
-        }
+        this.stunTimer = .12;
+        if (this.health <= 0) this.die();
     }
 
     die() {
         this.alive = false;
-        // Death explosion particles
         if (particleSystem) {
-            particleSystem.emit(this.mesh.position, {
-                count: 20, color: this.color, speed: 8,
-                lifetime: 0.6, spread: 2
-            });
-            particleSystem.emit(this.mesh.position, {
-                count: 10, color: 0xffffff, speed: 5,
-                lifetime: 0.4, spread: 1
-            });
+            particleSystem.emit(this.mesh.position, { count: 14, color: this.color, speed: 6, lifetime: .5, spread: 1.5 });
+            particleSystem.emit(this.mesh.position, { count: 6, color: 0xffffff, speed: 3, lifetime: .3 });
         }
         if (audioSystem) audioSystem.playEnemyDeath();
         this.scene.remove(this.mesh);
     }
 
-    destroy() {
-        this.alive = false;
-        this.scene.remove(this.mesh);
-    }
+    destroy() { this.alive = false; this.scene.remove(this.mesh); }
 }

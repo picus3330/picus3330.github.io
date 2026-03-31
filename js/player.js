@@ -1,296 +1,340 @@
 /* ============================================================
-   NEXUS STRIKE — Player System
-   Movement, dash, health, shooting, invulnerability, boosts
+   NEXUS STRIKE — Player System with Hero Classes
+   
+   4 Heroes:
+     VANGUARD — Balanced. Ability: Energy burst (AoE damage)
+     PHANTOM  — Fast, low HP, rapid fire. Ability: Blink (teleport)
+     SENTINEL — Tanky, slow, shotgun. Ability: Shield (absorb hits)
+     STRIKER  — Medium. Ability: Power shot (high-damage charged)
    ============================================================ */
 
+const HERO_DEFS = {
+    vanguard: {
+        name: 'VANGUARD',
+        desc: 'Balanced combat operative. Reliable in all situations.',
+        color: 0x00ccff,
+        colorHex: '#00ccff',
+        health: 100,
+        speed: 9,
+        shootCooldown: 0.22,
+        damage: 20,
+        dashCooldown: 2.0,
+        specialCooldown: 6,
+        specialIcon: '◉',
+        specialName: 'PULSE BURST',
+        stats: { hp: 3, spd: 3, dmg: 3, fire: 3 }
+    },
+    phantom: {
+        name: 'PHANTOM',
+        desc: 'High-speed infiltrator. Blink behind enemy lines.',
+        color: 0xaa00ff,
+        colorHex: '#aa00ff',
+        health: 65,
+        speed: 13,
+        shootCooldown: 0.12,
+        damage: 12,
+        dashCooldown: 1.5,
+        specialCooldown: 4,
+        specialIcon: '⊘',
+        specialName: 'BLINK',
+        stats: { hp: 1, spd: 5, dmg: 2, fire: 5 }
+    },
+    sentinel: {
+        name: 'SENTINEL',
+        desc: 'Heavy weapons platform. Shotgun spread & energy shield.',
+        color: 0x00ff88,
+        colorHex: '#00ff88',
+        health: 150,
+        speed: 6,
+        shootCooldown: 0.55,
+        damage: 12, // per pellet, fires 4
+        dashCooldown: 2.5,
+        specialCooldown: 8,
+        specialIcon: '◈',
+        specialName: 'SHIELD',
+        stats: { hp: 5, spd: 1, dmg: 4, fire: 2 }
+    },
+    striker: {
+        name: 'STRIKER',
+        desc: 'Precision operative. Devastating charged power shot.',
+        color: 0xff8800,
+        colorHex: '#ff8800',
+        health: 85,
+        speed: 8,
+        shootCooldown: 0.3,
+        damage: 24,
+        dashCooldown: 2.0,
+        specialCooldown: 5,
+        specialIcon: '⊕',
+        specialName: 'POWER SHOT',
+        stats: { hp: 2, spd: 3, dmg: 5, fire: 3 }
+    }
+};
+
 class Player {
-    constructor(scene, camera) {
+    constructor(scene, camera, heroId) {
         this.scene = scene;
         this.camera = camera;
+        this.heroId = heroId || 'vanguard';
+        this.heroDef = HERO_DEFS[this.heroId];
         this.alive = true;
-        this.radius = 0.5;
+        this.radius = .5;
 
-        // Health
-        this.maxHealth = 100;
-        this.health = 100;
+        // Stats from hero def
+        this.maxHealth = this.heroDef.health;
+        this.health = this.maxHealth;
+        this.baseSpeed = this.heroDef.speed;
+        this.speed = this.baseSpeed;
+        this.baseDamage = this.heroDef.damage;
+        this.shootCooldown = this.heroDef.shootCooldown;
 
         // Movement
-        this.baseSpeed = 9;
-        this.speed = this.baseSpeed;
         this.velocity = new THREE.Vector3();
         this.acceleration = 40;
         this.friction = 12;
-        this.position = new THREE.Vector3(0, 0, 0);
 
         // Dash
         this.dashSpeed = 28;
-        this.dashDuration = 0.15;
-        this.dashCooldown = 2.0;
-        this.dashTimer = 0;       // Time left in dash
+        this.dashDuration = .15;
+        this.dashCooldownMax = this.heroDef.dashCooldown;
+        this.dashTimer = 0;
         this.dashCooldownTimer = 0;
         this.isDashing = false;
         this.dashDirection = new THREE.Vector3();
 
         // Shooting
-        this.shootCooldown = 0.2;
         this.shootTimer = 0;
-        this.baseDamage = 20;
+
+        // Special ability
+        this.specialCooldownMax = this.heroDef.specialCooldown;
+        this.specialCooldownTimer = 0;
+
+        // Shield (Sentinel)
+        this.shieldActive = false;
+        this.shieldTimer = 0;
+        this.shieldMesh = null;
 
         // Invulnerability
         this.invulnerable = false;
         this.invulTimer = 0;
-        this.invulDuration = 2.0;
+        this.invulDuration = 2;
 
         // Boosts
         this.speedBoostTimer = 0;
         this.damageBoostTimer = 0;
 
-        // Input state
-        this.input = { w: false, a: false, s: false, d: false, shoot: false, dash: false };
+        // Input
+        this.input = { w:false, a:false, s:false, d:false, shoot:false, dash:false, special:false };
         this.mouseWorld = new THREE.Vector3();
+        this._mouseNDC = new THREE.Vector2();
+        this._raycaster = new THREE.Raycaster();
+        this._groundPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+        this._aimDir = new THREE.Vector3();
 
-        this._createMesh();
+        this._buildMesh();
         this._setupInput();
     }
 
-    _createMesh() {
+    _buildMesh() {
+        const c = this.heroDef.color;
         this.mesh = new THREE.Group();
 
-        // Main body — angular hero shape
-        const bodyGeom = new THREE.CylinderGeometry(0.3, 0.45, 0.9, 8);
         const bodyMat = new THREE.MeshStandardMaterial({
-            color: 0x00ccff,
-            roughness: 0.2,
-            metalness: 0.8,
-            emissive: 0x00ccff,
-            emissiveIntensity: 0.3
+            color: c, roughness: .2, metalness: .8, emissive: c, emissiveIntensity: .3
         });
-        this.body = new THREE.Mesh(bodyGeom, bodyMat);
-        this.body.position.y = 0.5;
         this.bodyMaterial = bodyMat;
-        this.mesh.add(this.body);
 
-        // Head/visor
-        const headGeom = new THREE.SphereGeometry(0.22, 8, 8);
-        const headMat = new THREE.MeshStandardMaterial({
-            color: 0x00f0ff,
-            roughness: 0.1,
-            metalness: 1.0,
-            emissive: 0x00f0ff,
-            emissiveIntensity: 0.5
-        });
-        this.head = new THREE.Mesh(headGeom, headMat);
-        this.head.position.y = 1.1;
-        this.mesh.add(this.head);
+        // Body shape varies per hero
+        let bodyGeom;
+        switch (this.heroId) {
+            case 'phantom':
+                bodyGeom = new THREE.ConeGeometry(.35, .9, 6);
+                break;
+            case 'sentinel':
+                bodyGeom = new THREE.BoxGeometry(.7, .9, .7);
+                break;
+            case 'striker':
+                bodyGeom = new THREE.CylinderGeometry(.25, .45, .9, 6);
+                break;
+            default:
+                bodyGeom = new THREE.CylinderGeometry(.3, .45, .9, 8);
+        }
+        const body = new THREE.Mesh(bodyGeom, bodyMat);
+        body.position.y = .5;
+        this.mesh.add(body);
+        this.body = body;
 
-        // Gun barrel
-        const gunGeom = new THREE.CylinderGeometry(0.05, 0.05, 0.5, 6);
+        // Head
+        const head = new THREE.Mesh(
+            new THREE.SphereGeometry(.2, 6, 6),
+            new THREE.MeshStandardMaterial({ color: c, roughness: .1, metalness: 1, emissive: c, emissiveIntensity: .5 })
+        );
+        head.position.y = 1.1;
+        this.mesh.add(head);
+
+        // Gun
+        const gunGeom = new THREE.CylinderGeometry(.04, .04, .45, 5);
         gunGeom.rotateX(Math.PI / 2);
-        const gunMat = new THREE.MeshStandardMaterial({
-            color: 0x334455,
-            roughness: 0.3,
-            metalness: 0.9
-        });
-        this.gun = new THREE.Mesh(gunGeom, gunMat);
-        this.gun.position.set(0.3, 0.7, 0.3);
-        this.mesh.add(this.gun);
+        const gun = new THREE.Mesh(gunGeom, new THREE.MeshStandardMaterial({ color: 0x334455, roughness: .3, metalness: .9 }));
+        gun.position.set(.3, .7, .3);
+        this.mesh.add(gun);
 
-        // Subtle point light on player
-        const light = new THREE.PointLight(0x00ccff, 0.5, 6);
-        light.position.y = 1;
-        this.mesh.add(light);
-        this.playerLight = light;
-
-        // Ground shadow
-        const shadowGeom = new THREE.CircleGeometry(0.45, 16);
-        const shadowMat = new THREE.MeshBasicMaterial({
-            color: 0x000000, transparent: true, opacity: 0.35
-        });
-        const shadow = new THREE.Mesh(shadowGeom, shadowMat);
-        shadow.rotation.x = -Math.PI / 2;
-        shadow.position.y = 0.02;
+        // Shadow
+        const shadow = new THREE.Mesh(
+            new THREE.CircleGeometry(.4, 8),
+            new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: .3 })
+        );
+        shadow.rotation.x = -Math.PI / 2; shadow.position.y = .02;
         this.mesh.add(shadow);
 
         this.scene.add(this.mesh);
     }
 
     _setupInput() {
-        // Keyboard
-        window.addEventListener('keydown', (e) => {
+        this._onKeyDown = (e) => {
             switch (e.code) {
                 case 'KeyW': this.input.w = true; break;
                 case 'KeyA': this.input.a = true; break;
                 case 'KeyS': this.input.s = true; break;
                 case 'KeyD': this.input.d = true; break;
-                case 'Space':
-                    e.preventDefault();
-                    this.input.dash = true;
-                    break;
+                case 'Space': e.preventDefault(); this.input.dash = true; break;
+                case 'KeyQ': this.input.special = true; break;
             }
-        });
-        window.addEventListener('keyup', (e) => {
+        };
+        this._onKeyUp = (e) => {
             switch (e.code) {
                 case 'KeyW': this.input.w = false; break;
                 case 'KeyA': this.input.a = false; break;
                 case 'KeyS': this.input.s = false; break;
                 case 'KeyD': this.input.d = false; break;
                 case 'Space': this.input.dash = false; break;
+                case 'KeyQ': this.input.special = false; break;
             }
-        });
-
-        // Mouse
-        window.addEventListener('mousedown', (e) => {
-            if (e.button === 0) this.input.shoot = true;
-        });
-        window.addEventListener('mouseup', (e) => {
-            if (e.button === 0) this.input.shoot = false;
-        });
-
-        // Track mouse position for aiming (using raycaster in update)
-        this._mouseNDC = new THREE.Vector2();
-        this._raycaster = new THREE.Raycaster();
-        this._groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-
-        window.addEventListener('mousemove', (e) => {
+        };
+        this._onMouseDown = (e) => { if (e.button === 0) this.input.shoot = true; };
+        this._onMouseUp   = (e) => { if (e.button === 0) this.input.shoot = false; };
+        this._onMouseMove  = (e) => {
             this._mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
             this._mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            // Update crosshair position
-            const crosshair = document.getElementById('crosshair');
-            if (crosshair) {
-                crosshair.style.left = e.clientX + 'px';
-                crosshair.style.top = e.clientY + 'px';
-            }
-        });
+            const ch = document.getElementById('crosshair');
+            if (ch) { ch.style.left = e.clientX + 'px'; ch.style.top = e.clientY + 'px'; }
+        };
+
+        window.addEventListener('keydown', this._onKeyDown);
+        window.addEventListener('keyup', this._onKeyUp);
+        window.addEventListener('mousedown', this._onMouseDown);
+        window.addEventListener('mouseup', this._onMouseUp);
+        window.addEventListener('mousemove', this._onMouseMove);
     }
 
-    update(dt, combatSystem, obstacles) {
+    update(dt, combatSystem, obstacles, enemies) {
         if (!this.alive) return;
 
         this.shootTimer += dt;
         this.dashCooldownTimer -= dt;
+        this.specialCooldownTimer -= dt;
 
         // Boosts
-        if (this.speedBoostTimer > 0) {
-            this.speedBoostTimer -= dt;
-            this.speed = this.baseSpeed * 1.5;
-        } else {
-            this.speed = this.baseSpeed;
-        }
-        if (this.damageBoostTimer > 0) {
-            this.damageBoostTimer -= dt;
-        }
+        if (this.speedBoostTimer > 0) { this.speedBoostTimer -= dt; this.speed = this.baseSpeed * 1.4; }
+        else this.speed = this.baseSpeed;
+        if (this.damageBoostTimer > 0) this.damageBoostTimer -= dt;
 
         // Invulnerability
         if (this.invulnerable) {
             this.invulTimer -= dt;
-            if (this.invulTimer <= 0) {
-                this.invulnerable = false;
-            }
-            // Blink effect
+            if (this.invulTimer <= 0) this.invulnerable = false;
             this.mesh.visible = Math.sin(this.invulTimer * 20) > 0;
-        } else {
-            this.mesh.visible = true;
+        } else this.mesh.visible = true;
+
+        // Shield (Sentinel)
+        if (this.shieldActive) {
+            this.shieldTimer -= dt;
+            if (this.shieldTimer <= 0) {
+                this.shieldActive = false;
+                if (this.shieldMesh) { this.shieldMesh.visible = false; }
+            } else if (this.shieldMesh) {
+                this.shieldMesh.visible = true;
+                this.shieldMesh.rotation.y += dt * 3;
+                this.shieldMesh.material.opacity = .15 + Math.sin(Date.now() * .008) * .08;
+            }
         }
 
-        // Aim toward mouse
+        // Aim
         this._raycaster.setFromCamera(this._mouseNDC, this.camera);
-        const intersectPoint = new THREE.Vector3();
-        this._raycaster.ray.intersectPlane(this._groundPlane, intersectPoint);
-        if (intersectPoint) {
-            this.mouseWorld.copy(intersectPoint);
-            // Smooth rotation toward aim
-            const aimDir = new THREE.Vector3()
-                .subVectors(intersectPoint, this.mesh.position)
-                .setY(0);
-            if (aimDir.length() > 0.1) {
-                const targetAngle = Math.atan2(aimDir.x, aimDir.z);
-                let diff = targetAngle - this.mesh.rotation.y;
-                while (diff > Math.PI) diff -= Math.PI * 2;
-                while (diff < -Math.PI) diff += Math.PI * 2;
+        const ip = new THREE.Vector3();
+        if (this._raycaster.ray.intersectPlane(this._groundPlane, ip)) {
+            this.mouseWorld.copy(ip);
+            this._aimDir.subVectors(ip, this.mesh.position).setY(0);
+            if (this._aimDir.length() > .1) {
+                const ta = Math.atan2(this._aimDir.x, this._aimDir.z);
+                let diff = ta - this.mesh.rotation.y;
+                if (diff > Math.PI) diff -= Math.PI * 2;
+                if (diff < -Math.PI) diff += Math.PI * 2;
                 this.mesh.rotation.y += diff * Math.min(1, 15 * dt);
             }
+            this._aimDir.normalize();
         }
 
         // Dash
         if (this.input.dash && this.dashCooldownTimer <= 0 && !this.isDashing) {
             this.isDashing = true;
             this.dashTimer = this.dashDuration;
-            this.dashCooldownTimer = this.dashCooldown;
-            // Dash in movement direction, or facing direction
-            const moveDir = this._getMoveDirection();
-            this.dashDirection = moveDir.length() > 0 ? moveDir.normalize() : new THREE.Vector3(
-                Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y)
-            );
-            if (audioSystem) audioSystem.playDash();
-            // Dash trail
-            if (particleSystem) {
-                particleSystem.emit(this.mesh.position, {
-                    count: 12, color: 0x00f0ff, speed: 3,
-                    lifetime: 0.3, spread: 0.5, gravity: 0
-                });
+            this.dashCooldownTimer = this.dashCooldownMax;
+            const md = this._getMoveDir();
+            this.dashDirection = md.length() > 0 ? md.normalize() : new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y));
+
+            // Phantom blink: teleport forward
+            if (this.heroId === 'phantom') {
+                const blinkDist = 8;
+                this.mesh.position.x += this.dashDirection.x * blinkDist;
+                this.mesh.position.z += this.dashDirection.z * blinkDist;
+                this.mesh.position.x = Math.max(-24, Math.min(24, this.mesh.position.x));
+                this.mesh.position.z = Math.max(-24, Math.min(24, this.mesh.position.z));
+                this.isDashing = false;
+                if (particleSystem) particleSystem.emit(this.mesh.position, { count: 15, color: 0xaa00ff, speed: 5, lifetime: .3, spread: 2, gravity: 0 });
+            } else {
+                if (particleSystem) particleSystem.emit(this.mesh.position, { count: 8, color: this.heroDef.color, speed: 3, lifetime: .25, spread: .5, gravity: 0 });
             }
+            if (audioSystem) audioSystem.playDash();
         }
 
         if (this.isDashing) {
             this.dashTimer -= dt;
-            if (this.dashTimer <= 0) {
-                this.isDashing = false;
-            }
-            // Apply dash velocity
-            this.velocity.copy(this.dashDirection.clone().multiplyScalar(this.dashSpeed));
+            if (this.dashTimer <= 0) this.isDashing = false;
+            this.velocity.copy(this.dashDirection).multiplyScalar(this.dashSpeed);
         } else {
-            // Normal movement
-            const moveDir = this._getMoveDirection();
-            if (moveDir.length() > 0) {
-                moveDir.normalize();
-                // Accelerate
-                this.velocity.x += moveDir.x * this.acceleration * dt;
-                this.velocity.z += moveDir.z * this.acceleration * dt;
+            const md = this._getMoveDir();
+            if (md.length() > 0) {
+                md.normalize();
+                this.velocity.x += md.x * this.acceleration * dt;
+                this.velocity.z += md.z * this.acceleration * dt;
             }
-            // Apply friction
             this.velocity.x *= Math.max(0, 1 - this.friction * dt);
             this.velocity.z *= Math.max(0, 1 - this.friction * dt);
-            // Clamp to max speed
             const hSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.z ** 2);
-            if (hSpeed > this.speed) {
-                const scale = this.speed / hSpeed;
-                this.velocity.x *= scale;
-                this.velocity.z *= scale;
-            }
+            if (hSpeed > this.speed) { const sc = this.speed / hSpeed; this.velocity.x *= sc; this.velocity.z *= sc; }
         }
 
-        // Apply velocity
-        const newPos = this.mesh.position.clone();
-        newPos.x += this.velocity.x * dt;
-        newPos.z += this.velocity.z * dt;
+        // Apply movement + collision
+        const nx = this.mesh.position.x + this.velocity.x * dt;
+        const nz = this.mesh.position.z + this.velocity.z * dt;
+        this.mesh.position.x = Math.max(-24, Math.min(24, nx));
+        this.mesh.position.z = Math.max(-24, Math.min(24, nz));
 
-        // Arena bounds
-        newPos.x = Math.max(-24, Math.min(24, newPos.x));
-        newPos.z = Math.max(-24, Math.min(24, newPos.z));
-
-        // Obstacle collision
         for (const obs of obstacles) {
-            const box = obs.userData.bounds;
-            if (!box) continue;
-            const margin = this.radius + 0.1;
-            if (newPos.x > box.min.x - margin && newPos.x < box.max.x + margin &&
-                newPos.z > box.min.z - margin && newPos.z < box.max.z + margin) {
-                // Push out
-                const dx1 = newPos.x - (box.min.x - margin);
-                const dx2 = (box.max.x + margin) - newPos.x;
-                const dz1 = newPos.z - (box.min.z - margin);
-                const dz2 = (box.max.z + margin) - newPos.z;
-                const minD = Math.min(dx1, dx2, dz1, dz2);
-                if (minD === dx1) { newPos.x = box.min.x - margin; this.velocity.x = 0; }
-                else if (minD === dx2) { newPos.x = box.max.x + margin; this.velocity.x = 0; }
-                else if (minD === dz1) { newPos.z = box.min.z - margin; this.velocity.z = 0; }
-                else { newPos.z = box.max.z + margin; this.velocity.z = 0; }
+            const b = obs.userData.bounds; if (!b) continue;
+            const m = this.radius + .1;
+            if (this.mesh.position.x > b.min.x-m && this.mesh.position.x < b.max.x+m &&
+                this.mesh.position.z > b.min.z-m && this.mesh.position.z < b.max.z+m) {
+                const d1=this.mesh.position.x-(b.min.x-m), d2=(b.max.x+m)-this.mesh.position.x;
+                const d3=this.mesh.position.z-(b.min.z-m), d4=(b.max.z+m)-this.mesh.position.z;
+                const mn=Math.min(d1,d2,d3,d4);
+                if(mn===d1){this.mesh.position.x=b.min.x-m;this.velocity.x=0;}
+                else if(mn===d2){this.mesh.position.x=b.max.x+m;this.velocity.x=0;}
+                else if(mn===d3){this.mesh.position.z=b.min.z-m;this.velocity.z=0;}
+                else{this.mesh.position.z=b.max.z+m;this.velocity.z=0;}
             }
         }
-
-        this.mesh.position.x = newPos.x;
-        this.mesh.position.z = newPos.z;
-        this.position.copy(this.mesh.position);
 
         // Shooting
         if (this.input.shoot && this.shootTimer >= this.shootCooldown) {
@@ -298,105 +342,146 @@ class Player {
             this.shootTimer = 0;
         }
 
-        // Body tilt based on velocity
-        const tiltX = -this.velocity.z * 0.015;
-        const tiltZ = this.velocity.x * 0.015;
-        this.body.rotation.x += (tiltX - this.body.rotation.x) * 0.1;
-        this.body.rotation.z += (tiltZ - this.body.rotation.z) * 0.1;
-
-        // Boost visual
-        if (this.speedBoostTimer > 0 || this.damageBoostTimer > 0) {
-            this.playerLight.intensity = 1.0 + Math.sin(Date.now() * 0.01) * 0.3;
-            this.playerLight.color.setHex(this.damageBoostTimer > 0 ? 0xff00aa : 0xffcc00);
-        } else {
-            this.playerLight.intensity = 0.5;
-            this.playerLight.color.setHex(0x00ccff);
+        // Special ability (Q)
+        if (this.input.special && this.specialCooldownTimer <= 0) {
+            this._useSpecial(combatSystem, enemies);
+            this.specialCooldownTimer = this.specialCooldownMax;
         }
+
+        // Body tilt
+        this.body.rotation.x += (-this.velocity.z * .012 - this.body.rotation.x) * .1;
+        this.body.rotation.z += (this.velocity.x * .012 - this.body.rotation.z) * .1;
     }
 
-    _getMoveDirection() {
-        const dir = new THREE.Vector3();
-        if (this.input.w) dir.z -= 1;
-        if (this.input.s) dir.z += 1;
-        if (this.input.a) dir.x -= 1;
-        if (this.input.d) dir.x += 1;
-        return dir;
+    _getMoveDir() {
+        const d = new THREE.Vector3();
+        if (this.input.w) d.z -= 1; if (this.input.s) d.z += 1;
+        if (this.input.a) d.x -= 1; if (this.input.d) d.x += 1;
+        return d;
     }
 
-    _shoot(combatSystem) {
-        if (!combatSystem) return;
-        const aimDir = new THREE.Vector3()
-            .subVectors(this.mouseWorld, this.mesh.position)
-            .setY(0)
-            .normalize();
-
-        const spawnPos = this.mesh.position.clone();
-        spawnPos.y = 0.7;
-        spawnPos.addScaledVector(aimDir, 0.7);
-
+    _shoot(combat) {
+        if (!combat) return;
+        const sp = this.mesh.position.clone();
+        sp.y = .7; sp.addScaledVector(this._aimDir, .7);
         const dmg = this.damageBoostTimer > 0 ? this.baseDamage * 1.5 : this.baseDamage;
 
-        combatSystem.shoot(spawnPos, aimDir, {
-            isPlayer: true,
-            damage: dmg,
-            speed: 30,
-            lifetime: 2.0
-        });
-
-        if (audioSystem) audioSystem.playShoot();
-
-        // Muzzle flash particles
-        if (particleSystem) {
-            particleSystem.emit(spawnPos, {
-                count: 3, color: 0x00f0ff, speed: 4,
-                lifetime: 0.15, spread: 0.3, gravity: 0
+        if (this.heroId === 'sentinel') {
+            // Shotgun spread: 4 pellets
+            combat.shootSpread(sp, this._aimDir, .35, 4, {
+                isPlayer: true, damage: dmg, speed: 26, lifetime: 1.0
             });
+            if (audioSystem) audioSystem.playShotgun();
+        } else {
+            combat.shoot(sp, this._aimDir, {
+                isPlayer: true, damage: dmg,
+                speed: this.heroId === 'phantom' ? 34 : 30,
+                lifetime: 2
+            });
+            if (audioSystem) audioSystem.playShoot();
+        }
+        if (particleSystem) particleSystem.emit(sp, { count: 2, color: this.heroDef.color, speed: 3, lifetime: .1, spread: .2, gravity: 0, size: .25 });
+    }
+
+    _useSpecial(combat, enemies) {
+        switch (this.heroId) {
+            case 'vanguard':
+                // Pulse burst — AoE damage around player
+                if (audioSystem) audioSystem.playExplosion();
+                if (screenShake) screenShake.shake(.3);
+                if (particleSystem) particleSystem.emit(this.mesh.position, { count: 25, color: 0x00ccff, speed: 8, lifetime: .5, spread: 3, gravity: -2 });
+                for (const e of enemies) {
+                    if (!e.alive) continue;
+                    const dx = e.mesh.position.x - this.mesh.position.x;
+                    const dz = e.mesh.position.z - this.mesh.position.z;
+                    if (dx*dx + dz*dz < 64) e.takeDamage(35); // radius 8
+                }
+                break;
+
+            case 'phantom':
+                // Blink — teleport to mouse position
+                if (audioSystem) audioSystem.playDash();
+                const target = this.mouseWorld.clone();
+                target.x = Math.max(-24, Math.min(24, target.x));
+                target.z = Math.max(-24, Math.min(24, target.z));
+                if (particleSystem) particleSystem.emit(this.mesh.position, { count: 12, color: 0xaa00ff, speed: 5, lifetime: .3, spread: 1.5, gravity: 0 });
+                this.mesh.position.x = target.x;
+                this.mesh.position.z = target.z;
+                this.invulnerable = true; this.invulTimer = .5;
+                if (particleSystem) particleSystem.emit(this.mesh.position, { count: 12, color: 0xaa00ff, speed: 5, lifetime: .3, spread: 1.5, gravity: 0 });
+                break;
+
+            case 'sentinel':
+                // Shield — absorb next 50 damage for 4 seconds
+                this.shieldActive = true;
+                this.shieldTimer = 4;
+                if (!this.shieldMesh) {
+                    const sg = new THREE.SphereGeometry(1, 12, 12);
+                    const sm = new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: .15, side: THREE.DoubleSide });
+                    this.shieldMesh = new THREE.Mesh(sg, sm);
+                    this.shieldMesh.position.y = .6;
+                    this.mesh.add(this.shieldMesh);
+                }
+                this.shieldHP = 50;
+                if (audioSystem) audioSystem.playPickup();
+                if (particleSystem) particleSystem.emit(this.mesh.position, { count: 15, color: 0x00ff88, speed: 4, lifetime: .4, spread: 2, gravity: 0 });
+                break;
+
+            case 'striker':
+                // Power shot — big slow projectile, high damage
+                if (!combat) return;
+                const sp = this.mesh.position.clone();
+                sp.y = .7; sp.addScaledVector(this._aimDir, .7);
+                combat.shoot(sp, this._aimDir, {
+                    isPlayer: true, damage: 80, speed: 18, lifetime: 3
+                });
+                if (audioSystem) audioSystem.playCharge();
+                if (screenShake) screenShake.shake(.15);
+                if (particleSystem) particleSystem.emit(sp, { count: 10, color: 0xff8800, speed: 4, lifetime: .3, spread: .5, gravity: 0 });
+                break;
         }
     }
 
     takeDamage(amount) {
         if (this.invulnerable || !this.alive) return;
+        // Sentinel shield absorbs damage first
+        if (this.shieldActive && this.shieldHP > 0) {
+            this.shieldHP -= amount;
+            if (this.shieldHP <= 0) {
+                this.shieldActive = false;
+                if (this.shieldMesh) this.shieldMesh.visible = false;
+                amount = -this.shieldHP; // overflow damage
+                if (amount <= 0) return;
+            } else return;
+        }
         this.health -= amount;
-
-        // Damage vignette
-        const vignette = document.getElementById('damage-vignette');
-        if (vignette) {
-            vignette.classList.add('active');
-            setTimeout(() => vignette.classList.remove('active'), 200);
-        }
-
-        if (this.health <= 0) {
-            this.health = 0;
-            this.die();
-        }
+        const v = document.getElementById('damage-vignette');
+        if (v) { v.classList.add('active'); setTimeout(() => v.classList.remove('active'), 200); }
+        if (this.health <= 0) { this.health = 0; this.die(); }
     }
 
     die() {
         this.alive = false;
-        if (particleSystem) {
-            particleSystem.emit(this.mesh.position, {
-                count: 30, color: 0x00f0ff, speed: 10,
-                lifetime: 0.8, spread: 2
-            });
-        }
+        if (particleSystem) particleSystem.emit(this.mesh.position, { count: 25, color: this.heroDef.color, speed: 8, lifetime: .7, spread: 2 });
         if (audioSystem) audioSystem.playExplosion();
-        if (screenShake) screenShake.shake(0.5);
+        if (screenShake) screenShake.shake(.4);
         this.mesh.visible = false;
     }
 
     respawn() {
-        this.alive = true;
-        this.health = this.maxHealth;
-        this.mesh.position.set(0, 0, 0);
-        this.velocity.set(0, 0, 0);
-        this.mesh.visible = true;
-        this.invulnerable = true;
-        this.invulTimer = this.invulDuration;
-        this.speedBoostTimer = 0;
-        this.damageBoostTimer = 0;
+        this.alive = true; this.health = this.maxHealth;
+        this.mesh.position.set(0, 0, 0); this.velocity.set(0, 0, 0);
+        this.mesh.visible = true; this.invulnerable = true; this.invulTimer = this.invulDuration;
+        this.speedBoostTimer = 0; this.damageBoostTimer = 0;
+        this.shieldActive = false; if (this.shieldMesh) this.shieldMesh.visible = false;
     }
 
     destroy() {
+        window.removeEventListener('keydown', this._onKeyDown);
+        window.removeEventListener('keyup', this._onKeyUp);
+        window.removeEventListener('mousedown', this._onMouseDown);
+        window.removeEventListener('mouseup', this._onMouseUp);
+        window.removeEventListener('mousemove', this._onMouseMove);
         this.scene.remove(this.mesh);
     }
 }

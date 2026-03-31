@@ -1,278 +1,211 @@
 /* ============================================================
-   NEXUS STRIKE — Menu System
-   Animated Three.js background, button wiring, transitions
+   NEXUS STRIKE — Menu System with Hero Selection
    ============================================================ */
 
 class MenuSystem {
     constructor(scene, camera, renderer) {
         this.scene = scene;
         this.camera = camera;
-        this.renderer = renderer;
-        this.menuObjects = new THREE.Group();
-        this.scene.add(this.menuObjects);
         this.active = true;
         this.time = 0;
-
-        this._buildBackground();
+        this.menuObjects = new THREE.Group();
+        this.scene.add(this.menuObjects);
+        this.floaters = [];
+        this._build();
     }
 
-    /** Create animated menu background */
-    _buildBackground() {
-        // Floating geometric shapes
-        this.floaters = [];
+    _build() {
         const colors = [0x00f0ff, 0xff00aa, 0x4040ff, 0x00ff88, 0xffcc00];
-        const geometries = [
-            new THREE.OctahedronGeometry(0.5, 0),
-            new THREE.TetrahedronGeometry(0.5, 0),
-            new THREE.IcosahedronGeometry(0.4, 0),
-            new THREE.BoxGeometry(0.6, 0.6, 0.6),
-            new THREE.DodecahedronGeometry(0.4, 0),
+        const geoms = [
+            new THREE.OctahedronGeometry(.5, 0),
+            new THREE.TetrahedronGeometry(.5, 0),
+            new THREE.IcosahedronGeometry(.4, 0),
+            new THREE.BoxGeometry(.6, .6, .6),
         ];
 
-        for (let i = 0; i < 40; i++) {
-            const geom = geometries[Math.floor(Math.random() * geometries.length)];
-            const color = colors[Math.floor(Math.random() * colors.length)];
+        for (let i = 0; i < 30; i++) {
             const mat = new THREE.MeshBasicMaterial({
-                color: color,
-                wireframe: true,
-                transparent: true,
-                opacity: 0.15 + Math.random() * 0.2
+                color: colors[i % colors.length], wireframe: true, transparent: true, opacity: .12 + Math.random() * .15
             });
-            const mesh = new THREE.Mesh(geom, mat);
-
-            // Random position in a sphere
-            mesh.position.set(
-                (Math.random() - 0.5) * 50,
-                (Math.random() - 0.5) * 30,
-                (Math.random() - 0.5) * 50 - 20
-            );
-
-            mesh.userData.rotSpeed = {
-                x: (Math.random() - 0.5) * 0.5,
-                y: (Math.random() - 0.5) * 0.5,
-                z: (Math.random() - 0.5) * 0.3,
-            };
-            mesh.userData.floatSpeed = 0.3 + Math.random() * 0.5;
-            mesh.userData.floatOffset = Math.random() * Math.PI * 2;
-            mesh.userData.baseY = mesh.position.y;
-
-            const scale = 0.5 + Math.random() * 1.5;
-            mesh.scale.setScalar(scale);
-
+            const mesh = new THREE.Mesh(geoms[i % geoms.length], mat);
+            mesh.position.set((Math.random()-.5)*50, (Math.random()-.5)*25, (Math.random()-.5)*50-20);
+            mesh.userData.rs = { x: (Math.random()-.5)*.4, y: (Math.random()-.5)*.4 };
+            mesh.userData.fs = .3 + Math.random() * .4;
+            mesh.userData.fo = Math.random() * Math.PI * 2;
+            mesh.userData.by = mesh.position.y;
+            mesh.scale.setScalar(.5 + Math.random() * 1.5);
             this.menuObjects.add(mesh);
             this.floaters.push(mesh);
         }
 
-        // Central glowing orb
-        const orbGeom = new THREE.SphereGeometry(2, 32, 32);
-        const orbMat = new THREE.MeshBasicMaterial({
-            color: 0x00f0ff,
-            transparent: true,
-            opacity: 0.08
-        });
-        this.centralOrb = new THREE.Mesh(orbGeom, orbMat);
-        this.centralOrb.position.set(0, 0, -15);
-        this.menuObjects.add(this.centralOrb);
-
-        // Ring around orb
-        const ringGeom = new THREE.TorusGeometry(3.5, 0.05, 8, 64);
-        const ringMat = new THREE.MeshBasicMaterial({
-            color: 0x00f0ff,
-            transparent: true,
-            opacity: 0.2
-        });
-        this.orbRing = new THREE.Mesh(ringGeom, ringMat);
-        this.orbRing.position.copy(this.centralOrb.position);
-        this.menuObjects.add(this.orbRing);
-
-        // Second ring
-        const ring2 = new THREE.Mesh(
-            new THREE.TorusGeometry(4.5, 0.03, 8, 64),
-            new THREE.MeshBasicMaterial({ color: 0xff00aa, transparent: true, opacity: 0.12 })
+        // Central orb
+        this.orb = new THREE.Mesh(
+            new THREE.SphereGeometry(2, 24, 24),
+            new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: .06 })
         );
-        ring2.position.copy(this.centralOrb.position);
-        ring2.rotation.x = Math.PI / 3;
-        this.orbRing2 = ring2;
-        this.menuObjects.add(ring2);
+        this.orb.position.set(0, 0, -15);
+        this.menuObjects.add(this.orb);
 
-        // Particle field (static dots)
-        const starCount = 200;
-        const starGeom = new THREE.BufferGeometry();
-        const starPositions = new Float32Array(starCount * 3);
+        // Ring
+        this.ring = new THREE.Mesh(
+            new THREE.TorusGeometry(3.5, .04, 6, 48),
+            new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: .15 })
+        );
+        this.ring.position.copy(this.orb.position);
+        this.menuObjects.add(this.ring);
+
+        // Stars (single Points object)
+        const starCount = 150;
+        const sp = new Float32Array(starCount * 3);
         for (let i = 0; i < starCount * 3; i += 3) {
-            starPositions[i] = (Math.random() - 0.5) * 80;
-            starPositions[i + 1] = (Math.random() - 0.5) * 40;
-            starPositions[i + 2] = (Math.random() - 0.5) * 80 - 20;
+            sp[i] = (Math.random()-.5)*80; sp[i+1] = (Math.random()-.5)*35; sp[i+2] = (Math.random()-.5)*80-20;
         }
-        starGeom.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-        const starMat = new THREE.PointsMaterial({
-            color: 0x4488cc,
-            size: 0.15,
-            transparent: true,
-            opacity: 0.4
-        });
-        this.stars = new THREE.Points(starGeom, starMat);
+        const sg = new THREE.BufferGeometry();
+        sg.setAttribute('position', new THREE.BufferAttribute(sp, 3));
+        this.stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0x3366aa, size: .12, transparent: true, opacity: .35 }));
         this.menuObjects.add(this.stars);
 
-        // Menu camera position
         this.camera.position.set(0, 5, 12);
         this.camera.lookAt(0, 0, -15);
     }
 
-    /** Animate menu background */
     update(dt) {
         if (!this.active) return;
         this.time += dt;
-
-        // Rotate floaters
         for (const f of this.floaters) {
-            f.rotation.x += f.userData.rotSpeed.x * dt;
-            f.rotation.y += f.userData.rotSpeed.y * dt;
-            f.rotation.z += f.userData.rotSpeed.z * dt;
-            f.position.y = f.userData.baseY +
-                Math.sin(this.time * f.userData.floatSpeed + f.userData.floatOffset) * 1.5;
+            f.rotation.x += f.userData.rs.x * dt;
+            f.rotation.y += f.userData.rs.y * dt;
+            f.position.y = f.userData.by + Math.sin(this.time * f.userData.fs + f.userData.fo) * 1.5;
         }
-
-        // Pulse orb
-        const orbScale = 1 + Math.sin(this.time * 1.5) * 0.15;
-        this.centralOrb.scale.setScalar(orbScale);
-
-        // Rotate rings
-        this.orbRing.rotation.z += dt * 0.3;
-        this.orbRing.rotation.x = Math.sin(this.time * 0.5) * 0.3;
-        this.orbRing2.rotation.y += dt * 0.4;
-        this.orbRing2.rotation.z += dt * 0.2;
-
-        // Subtle camera sway
-        this.camera.position.x = Math.sin(this.time * 0.2) * 1.5;
-        this.camera.position.y = 5 + Math.sin(this.time * 0.3) * 0.5;
+        this.orb.scale.setScalar(1 + Math.sin(this.time * 1.5) * .12);
+        this.ring.rotation.z += dt * .3;
+        this.ring.rotation.x = Math.sin(this.time * .5) * .3;
+        this.camera.position.x = Math.sin(this.time * .2) * 1.5;
+        this.camera.position.y = 5 + Math.sin(this.time * .3) * .4;
         this.camera.lookAt(0, 0, -15);
-
-        // Slowly rotate stars
-        this.stars.rotation.y += dt * 0.02;
+        this.stars.rotation.y += dt * .015;
     }
 
-    /** Show menu objects */
-    show() {
-        this.active = true;
-        this.menuObjects.visible = true;
-    }
+    show() { this.active = true; this.menuObjects.visible = true; }
+    hide() { this.active = false; this.menuObjects.visible = false; }
+}
 
-    /** Hide menu objects */
-    hide() {
-        this.active = false;
-        this.menuObjects.visible = false;
+/* ---- Hero Selection Grid Builder ---- */
+function buildHeroSelectUI() {
+    const grid = document.getElementById('hero-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    Object.keys(HERO_DEFS).forEach((id, idx) => {
+        const h = HERO_DEFS[id];
+        const card = document.createElement('div');
+        card.className = 'hero-card' + (idx === 0 ? ' selected' : '');
+        card.dataset.hero = id;
+        card.innerHTML = `
+            <div class="hero-card-icon" style="color:${h.colorHex};text-shadow:0 0 15px ${h.colorHex}">${h.specialIcon}</div>
+            <div class="hero-card-name">${h.name}</div>
+            <div class="hero-card-role">${h.specialName}</div>
+        `;
+        card.style.borderColor = idx === 0 ? h.colorHex : '';
+        grid.appendChild(card);
+    });
+
+    // Show first hero detail
+    _updateHeroDetail('vanguard');
+}
+
+function _updateHeroDetail(heroId) {
+    const h = HERO_DEFS[heroId];
+    document.getElementById('hero-detail-name').textContent = h.name;
+    document.getElementById('hero-detail-name').style.color = h.colorHex;
+    document.getElementById('hero-detail-desc').textContent = h.desc;
+
+    const statsEl = document.getElementById('hero-stats');
+    statsEl.innerHTML = '';
+    const labels = { hp: 'HEALTH', spd: 'SPEED', dmg: 'DAMAGE', fire: 'FIRE RATE' };
+    for (const [key, label] of Object.entries(labels)) {
+        const val = h.stats[key];
+        const row = document.createElement('div');
+        row.className = 'hero-stat-row';
+        let bars = '';
+        for (let i = 0; i < 5; i++) {
+            bars += `<div class="stat-pip ${i < val ? 'filled' : ''}" style="${i < val ? 'background:' + h.colorHex + ';box-shadow:0 0 4px ' + h.colorHex : ''}"></div>`;
+        }
+        row.innerHTML = `<span class="stat-name">${label}</span><div class="stat-pips">${bars}</div>`;
+        statsEl.appendChild(row);
     }
 }
 
-/** Wire up all menu button interactions */
+/* ---- Wire all buttons ---- */
 function setupMenuButtons(gameManager, menuSystem, ui) {
     const $ = id => document.getElementById(id);
 
-    // Play
+    buildHeroSelectUI();
+
     $('btn-play').addEventListener('click', () => {
+        if (audioSystem) audioSystem.playClick();
+        ui.showScreen('hero-select');
+    });
+
+    // Hero card selection
+    $('hero-grid').addEventListener('click', (e) => {
+        const card = e.target.closest('.hero-card');
+        if (!card) return;
+        if (audioSystem) audioSystem.playClick();
+        document.querySelectorAll('.hero-card').forEach(c => {
+            c.classList.remove('selected');
+            c.style.borderColor = '';
+        });
+        card.classList.add('selected');
+        const heroId = card.dataset.hero;
+        const h = HERO_DEFS[heroId];
+        card.style.borderColor = h.colorHex;
+        gameManager.selectedHero = heroId;
+        _updateHeroDetail(heroId);
+    });
+
+    $('btn-deploy').addEventListener('click', () => {
         if (audioSystem) audioSystem.playClick();
         menuSystem.hide();
         gameManager.buildArena();
         gameManager.startGame();
     });
 
-    // Settings
-    $('btn-settings').addEventListener('click', () => {
-        if (audioSystem) audioSystem.playClick();
-        ui.showScreen('settings-panel');
-    });
-    $('btn-settings-back').addEventListener('click', () => {
-        if (audioSystem) audioSystem.playClick();
-        ui.showMenu();
-    });
-    $('btn-pause-settings').addEventListener('click', () => {
-        if (audioSystem) audioSystem.playClick();
-        ui.showScreen('settings-panel');
-    });
-
-    // Controls
-    $('btn-controls').addEventListener('click', () => {
-        if (audioSystem) audioSystem.playClick();
-        ui.showScreen('controls-panel');
-    });
-    $('btn-controls-back').addEventListener('click', () => {
+    $('btn-hero-back').addEventListener('click', () => {
         if (audioSystem) audioSystem.playClick();
         ui.showMenu();
     });
 
-    // Credits
-    $('btn-credits').addEventListener('click', () => {
-        if (audioSystem) audioSystem.playClick();
-        ui.showScreen('credits-panel');
-    });
-    $('btn-credits-back').addEventListener('click', () => {
-        if (audioSystem) audioSystem.playClick();
-        ui.showMenu();
-    });
+    $('btn-settings').addEventListener('click', () => { if (audioSystem) audioSystem.playClick(); ui.showScreen('settings-panel'); });
+    $('btn-settings-back').addEventListener('click', () => { if (audioSystem) audioSystem.playClick(); ui.showMenu(); });
+    $('btn-controls').addEventListener('click', () => { if (audioSystem) audioSystem.playClick(); ui.showScreen('controls-panel'); });
+    $('btn-controls-back').addEventListener('click', () => { if (audioSystem) audioSystem.playClick(); ui.showMenu(); });
+    $('btn-credits').addEventListener('click', () => { if (audioSystem) audioSystem.playClick(); ui.showScreen('credits-panel'); });
+    $('btn-credits-back').addEventListener('click', () => { if (audioSystem) audioSystem.playClick(); ui.showMenu(); });
 
-    // Pause controls
-    $('btn-resume').addEventListener('click', () => {
-        if (audioSystem) audioSystem.playClick();
-        gameManager.resume();
-    });
-    $('btn-quit').addEventListener('click', () => {
-        if (audioSystem) audioSystem.playClick();
-        menuSystem.show();
-        gameManager.quitToMenu();
-    });
+    $('btn-resume').addEventListener('click', () => { if (audioSystem) audioSystem.playClick(); gameManager.resume(); });
+    $('btn-quit').addEventListener('click', () => { if (audioSystem) audioSystem.playClick(); menuSystem.show(); gameManager.quitToMenu(); });
+    $('btn-restart').addEventListener('click', () => { if (audioSystem) audioSystem.playClick(); gameManager.restart(); });
+    $('btn-gameover-menu').addEventListener('click', () => { if (audioSystem) audioSystem.playClick(); menuSystem.show(); gameManager.quitToMenu(); });
 
-    // Game over
-    $('btn-restart').addEventListener('click', () => {
-        if (audioSystem) audioSystem.playClick();
-        gameManager.restart();
-    });
-    $('btn-gameover-menu').addEventListener('click', () => {
-        if (audioSystem) audioSystem.playClick();
-        menuSystem.show();
-        gameManager.quitToMenu();
-    });
-
-    // Keyboard shortcuts
     window.addEventListener('keydown', (e) => {
         if (e.code === 'Escape') {
-            if (gameManager.state === GAME_STATE.PLAYING) {
-                gameManager.pause();
-            } else if (gameManager.state === GAME_STATE.PAUSED) {
-                gameManager.resume();
-            }
+            if (gameManager.state === GAME_STATE.PLAYING) gameManager.pause();
+            else if (gameManager.state === GAME_STATE.PAUSED) gameManager.resume();
         }
-        if (e.code === 'KeyR' && gameManager.state === GAME_STATE.GAME_OVER) {
-            gameManager.restart();
-        }
+        if (e.code === 'KeyR' && gameManager.state === GAME_STATE.GAME_OVER) gameManager.restart();
     });
 
-    // Settings controls
-    $('vol-master').addEventListener('input', (e) => {
-        if (audioSystem) audioSystem.setMasterVolume(e.target.value / 100);
-    });
-    $('vol-sfx').addEventListener('input', (e) => {
-        if (audioSystem) audioSystem.setSfxVolume(e.target.value / 100);
-    });
-    $('screen-shake').addEventListener('change', (e) => {
-        if (screenShake) screenShake.enabled = e.target.checked;
-    });
+    $('vol-master').addEventListener('input', (e) => { if (audioSystem) audioSystem.setMasterVolume(e.target.value / 100); });
+    $('vol-sfx').addEventListener('input', (e) => { if (audioSystem) audioSystem.setSfxVolume(e.target.value / 100); });
+    $('screen-shake').addEventListener('change', (e) => { if (screenShake) screenShake.enabled = e.target.checked; });
+    $('quality-select').addEventListener('change', (e) => { gameManager.quality = e.target.value; });
 
-    // Button hover sounds
+    // Hover sounds
     document.querySelectorAll('.menu-btn').forEach(btn => {
         btn.addEventListener('mouseenter', () => {
             if (audioSystem && audioSystem.initialized) {
-                // Tiny hover sound
-                const osc = audioSystem.ctx.createOscillator();
-                const gain = audioSystem.ctx.createGain();
-                osc.type = 'sine';
-                osc.frequency.value = 1200;
-                gain.gain.setValueAtTime(0.03, audioSystem.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, audioSystem.ctx.currentTime + 0.03);
-                osc.connect(gain);
-                gain.connect(audioSystem.sfxGain);
-                osc.start();
-                osc.stop(audioSystem.ctx.currentTime + 0.03);
+                audioSystem._tone('sine', 1200, 1000, .03, .03);
             }
         });
     });
