@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<title>Hacker Terminal</title>
+
+<style>
+    body {
+        margin: 0;
+        background: black;
+        color: #00ff00;
+        font-family: "Courier New", monospace;
+        overflow: hidden;
+    }
+
+    .terminal {
+        padding: 20px;
+        font-size: 18px;
+        white-space: pre-line;
+    }
+
+    .cursor {
+        display: inline-block;
+        width: 10px;
+        background: #00ff00;
+        margin-left: 5px;
+        animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+        0%, 50%, 100% { opacity: 1; }
+        25%, 75% { opacity: 0; }
+    }
+</style>
+</head>
+
+<body>
+
+<div class="terminal" id="terminal"></div>
+
+<script>
+const terminal = document.getElementById("terminal");
+
+function typeText(text, delay = 40) {
+    return new Promise(resolve => {
+        let i = 0;
+        function typing() {
+            if (i < text.length) {
+                terminal.innerHTML += text.charAt(i);
+                i++;
+                setTimeout(typing, delay);
+            } else {
+                terminal.innerHTML += "\n";
+                resolve();
+            }
+        }
+        typing();
+    });
+}
+
+async function run() {
+    await typeText("> Initializing system...");
+    await typeText("> Connecting to database...");
+    await typeText("> Bypassing security...");
+    await typeText("> Access granted ✔\n");
+
+    await new Promise(r => setTimeout(r, 800));
+
+    await typeText("> Fetching Full Name...");
+    await new Promise(r => setTimeout(r, 1000));
+    await typeText("Full Name: Mrzena Jacob\n");
+
+    await typeText("> Fetching Address...");
+    await new Promise(r => setTimeout(r, 1200));
+    await typeText("Address: U Hostína 1775, Úvaly 25082\n");
+
+    await typeText("> Fetching Email...");
+    await new Promise(r => setTimeout(r, 1200));
+    await typeText("Email: warzoneisagoodgame@gmail.com\n");
+
+    await typeText("> DONE ✔");
+}
+
+run();
+</script>
+
+</body>
+</html>
