@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS STRIKE</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- LOADING SCREEN -->
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">NEXUS STRIKE</div>
+            <div class="loader-bar-container">
+                <div class="loader-bar" id="loader-bar"></div>
+            </div>
+            <div class="loader-text" id="loader-text">INITIALIZING SYSTEMS...</div>
+        </div>
+    </div>
+
+    <!-- MAIN MENU -->
+    <div id="main-menu" class="screen hidden">
+        <div class="menu-overlay"></div>
+        <div class="menu-content">
+            <div class="menu-title-group">
+                <div class="menu-subtitle">/// ARENA COMBAT PROTOCOL</div>
+                <h1 class="menu-title">NEXUS<span class="title-accent">STRIKE</span></h1>
+                <div class="menu-tagline">SURVIVE. DOMINATE. ASCEND.</div>
+            </div>
+            <nav class="menu-buttons">
+                <button class="menu-btn primary" id="btn-play">
+                    <span class="btn-icon">▶</span>
+                    <span class="btn-text">DEPLOY</span>
+                    <span class="btn-sub">ENTER THE ARENA</span>
+                </button>
+                <button class="menu-btn" id="btn-settings">
+                    <span class="btn-icon">⚙</span>
+                    <span class="btn-text">SETTINGS</span>
+                </button>
+                <button class="menu-btn" id="btn-controls">
+                    <span class="btn-icon">⌨</span>
+                    <span class="btn-text">CONTROLS</span>
+                </button>
+                <button class="menu-btn" id="btn-credits">
+                    <span class="btn-icon">★</span>
+                    <span class="btn-text">CREDITS</span>
+                </button>
+            </nav>
+            <div class="menu-footer">
+                <span class="version">v1.0.0</span>
+                <span class="footer-sep">|</span>
+                <span class="engine-info">THREE.JS ENGINE</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- SETTINGS PANEL -->
+    <div id="settings-panel" class="screen hidden">
+        <div class="panel-overlay"></div>
+        <div class="panel-box">
+            <h2 class="panel-title">SETTINGS</h2>
+            <div class="setting-row">
+                <label>MASTER VOLUME</label>
+                <input type="range" id="vol-master" min="0" max="100" value="70">
+            </div>
+            <div class="setting-row">
+                <label>SFX VOLUME</label>
+                <input type="range" id="vol-sfx" min="0" max="100" value="80">
+            </div>
+            <div class="setting-row">
+                <label>MOUSE SENSITIVITY</label>
+                <input type="range" id="sensitivity" min="1" max="20" value="10">
+            </div>
+            <div class="setting-row">
+                <label>QUALITY</label>
+                <select id="quality-select">
+                    <option value="low">LOW</option>
+                    <option value="medium" selected>MEDIUM</option>
+                    <option value="high">HIGH</option>
+                </select>
+            </div>
+            <div class="setting-row">
+                <label>SCREEN SHAKE</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="screen-shake" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <button class="menu-btn" id="btn-settings-back">
+                <span class="btn-icon">←</span>
+                <span class="btn-text">BACK</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- CONTROLS PANEL -->
+    <div id="controls-panel" class="screen hidden">
+        <div class="panel-overlay"></div>
+        <div class="panel-box">
+            <h2 class="panel-title">CONTROLS</h2>
+            <div class="controls-grid">
+                <div class="control-item"><span class="key">W A S D</span><span class="control-desc">MOVE</span></div>
+                <div class="control-item"><span class="key">MOUSE</span><span class="control-desc">AIM</span></div>
+                <div class="control-item"><span class="key">LEFT CLICK</span><span class="control-desc">SHOOT</span></div>
+                <div class="control-item"><span class="key">SPACE</span><span class="control-desc">DASH</span></div>
+                <div class="control-item"><span class="key">ESC</span><span class="control-desc">PAUSE</span></div>
+                <div class="control-item"><span class="key">R</span><span class="control-desc">RESTART</span></div>
+            </div>
+            <button class="menu-btn" id="btn-controls-back">
+                <span class="btn-icon">←</span>
+                <span class="btn-text">BACK</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- CREDITS PANEL -->
+    <div id="credits-panel" class="screen hidden">
+        <div class="panel-overlay"></div>
+        <div class="panel-box">
+            <h2 class="panel-title">CREDITS</h2>
+            <div class="credits-content">
+                <div class="credit-section">
+                    <h3>DESIGN & DEVELOPMENT</h3>
+                    <p>Built with Three.js</p>
+                </div>
+                <div class="credit-section">
+                    <h3>TECHNOLOGY</h3>
+                    <p>HTML5 • CSS3 • JavaScript ES6+</p>
+                    <p>Three.js WebGL Renderer</p>
+                    <p>Web Audio API</p>
+                </div>
+                <div class="credit-section">
+                    <h3>NEXUS STRIKE</h3>
+                    <p>An original arena combat game</p>
+                </div>
+            </div>
+            <button class="menu-btn" id="btn-credits-back">
+                <span class="btn-icon">←</span>
+                <span class="btn-text">BACK</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- IN-GAME HUD -->
+    <div id="game-hud" class="hidden">
+        <div class="hud-top">
+            <div class="hud-health">
+                <div class="health-icon">♥</div>
+                <div class="health-bar-outer">
+                    <div class="health-bar-inner" id="health-bar"></div>
+                    <div class="health-bar-damage" id="health-bar-damage"></div>
+                </div>
+                <div class="health-text" id="health-text">100</div>
+            </div>
+            <div class="hud-score">
+                <div class="score-label">SCORE</div>
+                <div class="score-value" id="score-value">0</div>
+            </div>
+            <div class="hud-wave">
+                <div class="wave-label">WAVE</div>
+                <div class="wave-value" id="wave-value">1</div>
+            </div>
+        </div>
+        <div class="hud-bottom">
+            <div class="hud-abilities">
+                <div class="ability-slot" id="ability-dash">
+                    <div class="ability-icon">⚡</div>
+                    <div class="ability-cooldown" id="dash-cooldown"></div>
+                    <div class="ability-key">SPACE</div>
+                </div>
+                <div class="ability-slot" id="ability-shoot">
+                    <div class="ability-icon">◎</div>
+                    <div class="ability-cooldown" id="shoot-cooldown"></div>
+                    <div class="ability-key">LMB</div>
+                </div>
+            </div>
+            <div class="hud-enemies">
+                <span class="enemies-label">HOSTILES:</span>
+                <span class="enemies-count" id="enemies-count">0</span>
+            </div>
+        </div>
+        <div class="hud-crosshair" id="crosshair">
+            <div class="crosshair-dot"></div>
+            <div class="crosshair-ring"></div>
+        </div>
+        <div class="hud-hit-marker hidden" id="hit-marker">✕</div>
+        <div class="hud-damage-vignette" id="damage-vignette"></div>
+        <div class="wave-announcement hidden" id="wave-announcement">
+            <div class="wave-announce-text">WAVE <span id="wave-announce-num">1</span></div>
+            <div class="wave-announce-sub">INCOMING</div>
+        </div>
+    </div>
+
+    <!-- PAUSE MENU -->
+    <div id="pause-menu" class="screen hidden">
+        <div class="panel-overlay"></div>
+        <div class="panel-box">
+            <h2 class="panel-title">PAUSED</h2>
+            <button class="menu-btn primary" id="btn-resume">
+                <span class="btn-icon">▶</span>
+                <span class="btn-text">RESUME</span>
+            </button>
+            <button class="menu-btn" id="btn-pause-settings">
+                <span class="btn-icon">⚙</span>
+                <span class="btn-text">SETTINGS</span>
+            </button>
+            <button class="menu-btn danger" id="btn-quit">
+                <span class="btn-icon">✕</span>
+                <span class="btn-text">QUIT TO MENU</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div id="game-over" class="screen hidden">
+        <div class="panel-overlay"></div>
+        <div class="panel-box game-over-box">
+            <h2 class="panel-title game-over-title">TERMINATED</h2>
+            <div class="game-over-stats">
+                <div class="stat-row">
+                    <span class="stat-label">FINAL SCORE</span>
+                    <span class="stat-value" id="final-score">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">WAVE REACHED</span>
+                    <span class="stat-value" id="final-wave">1</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">ENEMIES ELIMINATED</span>
+                    <span class="stat-value" id="final-kills">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">BEST SCORE</span>
+                    <span class="stat-value" id="best-score">0</span>
+                </div>
+            </div>
+            <button class="menu-btn primary" id="btn-restart">
+                <span class="btn-icon">↻</span>
+                <span class="btn-text">REDEPLOY</span>
+            </button>
+            <button class="menu-btn" id="btn-gameover-menu">
+                <span class="btn-icon">←</span>
+                <span class="btn-text">MAIN MENU</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- THREE.JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <!-- GAME MODULES -->
+    <script src="js/effects.js"></script>
+    <script src="js/combat.js"></script>
+    <script src="js/enemy.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/gameManager.js"></script>
+    <script src="js/menu.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
