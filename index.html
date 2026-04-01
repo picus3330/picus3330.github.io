@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>Mini FPS (Three.js)</title>
+<title>Mini FPS</title>
 <style>
     body { margin:0; overflow:hidden; font-family:Arial; background:#000; }
     canvas { display:block; }
@@ -35,6 +35,17 @@
     #crosshair::after {
         top:9px; left:0; height:2px; width:20px;
     }
+
+    /* 🔥 TVŮJ OBRÁZEK */
+    #overlayImg {
+        position:absolute;
+        bottom:20px;
+        right:20px;
+        width:200px;
+        pointer-events:none;
+        z-index:5;
+        opacity:0.9;
+    }
 </style>
 </head>
 <body>
@@ -52,6 +63,9 @@
 <div id="hud"></div>
 <div id="crosshair"></div>
 
+<!-- 🔥 SEM STAČÍ DÁT OBRÁZEK -->
+<img id="overlayImg" src="overlay.png">
+
 <script type="importmap">
 {
     "imports": {
@@ -63,9 +77,6 @@
 <script type="module">
 import * as THREE from 'three';
 
-/* =====================
-   ZÁKLADNÍ SETUP
-===================== */
 let scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xaaaaaa, 10, 80);
 
@@ -83,78 +94,47 @@ window.addEventListener('resize', ()=>{
 
 let clock = new THREE.Clock();
 
-/* =====================
-   SVĚTLO
-===================== */
+/* světlo */
 let light = new THREE.DirectionalLight(0xffffff, 1);
 light.position.set(10,20,10);
 light.castShadow = true;
 scene.add(light);
 
-/* =====================
-   PODLAHA (šachovnice)
-===================== */
-function createFloor(){
-    let size = 512;
-    let canvas = document.createElement('canvas');
-    canvas.width = canvas.height = size;
-    let ctx = canvas.getContext('2d');
+/* podlaha */
+let floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(200,200),
+    new THREE.MeshStandardMaterial({color:0x777777})
+);
+floor.rotation.x = -Math.PI/2;
+floor.receiveShadow = true;
+scene.add(floor);
 
-    for(let y=0;y<8;y++){
-        for(let x=0;x<8;x++){
-            ctx.fillStyle = (x+y)%2==0 ? '#888' : '#555';
-            ctx.fillRect(x*64,y*64,64,64);
-        }
-    }
-
-    let tex = new THREE.CanvasTexture(canvas);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(20,20);
-
-    let mat = new THREE.MeshStandardMaterial({map:tex});
-    let geo = new THREE.PlaneGeometry(200,200);
-    let floor = new THREE.Mesh(geo, mat);
-    floor.rotation.x = -Math.PI/2;
-    floor.receiveShadow = true;
-    scene.add(floor);
-}
-createFloor();
-
-/* =====================
-   ZDI A PŘEKÁŽKY
-===================== */
+/* překážky */
 let colliders = [];
-
-function addBox(x,z,w,h,d){
+function addBox(x,z){
     let mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(w,h,d),
-        new THREE.MeshStandardMaterial({color:0x777777})
+        new THREE.BoxGeometry(4,4,4),
+        new THREE.MeshStandardMaterial({color:0x555555})
     );
-    mesh.position.set(x,h/2,z);
+    mesh.position.set(x,2,z);
     mesh.castShadow = true;
     scene.add(mesh);
-
-    colliders.push(new THREE.Box3().setFromObject(mesh));
+}
+for(let i=0;i<15;i++){
+    addBox(Math.random()*80-40, Math.random()*80-40);
 }
 
-for(let i=0;i<20;i++){
-    addBox(Math.random()*80-40, Math.random()*80-40, 4,4,4);
-}
-
-/* =====================
-   PLAYER
-===================== */
+/* player */
 let velocity = new THREE.Vector3();
 let direction = new THREE.Vector3();
+let keys = {};
 let onGround = false;
 
-let keys = {};
 document.addEventListener('keydown', e=>keys[e.code]=true);
 document.addEventListener('keyup', e=>keys[e.code]=false);
 
-let yaw = 0, pitch = 0;
+let yaw=0,pitch=0;
 
-/* Pointer Lock */
 document.getElementById('startBtn').onclick = ()=>{
     document.body.requestPointerLock();
     document.getElementById('menu').style.display="none";
@@ -163,208 +143,131 @@ document.getElementById('startBtn').onclick = ()=>{
 
 document.addEventListener('mousemove', e=>{
     if(document.pointerLockElement){
-        yaw -= e.movementX * 0.002;
-        pitch -= e.movementY * 0.002;
-        pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+        yaw -= e.movementX*0.002;
+        pitch -= e.movementY*0.002;
+        pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2,pitch));
     }
 });
 
-/* =====================
-   ZBRAŇ
-===================== */
-let gun = new THREE.Group();
-let barrel = new THREE.Mesh(
-    new THREE.BoxGeometry(0.2,0.2,1),
+/* zbraň */
+let gun = new THREE.Mesh(
+    new THREE.BoxGeometry(0.3,0.3,1),
     new THREE.MeshStandardMaterial({color:0x222222})
 );
-barrel.position.z = -0.5;
-gun.add(barrel);
 gun.position.set(0.5,-0.5,-1);
 camera.add(gun);
 scene.add(camera);
 
-let ammo = 30;
-let reloading = false;
-let recoil = 0;
+let ammo=30;
+let recoil=0;
 
-/* =====================
-   MUZZLE FLASH
-===================== */
-let flash = new THREE.PointLight(0xffaa55, 0, 5);
+/* flash */
+let flash = new THREE.PointLight(0xffaa55,0,5);
 camera.add(flash);
 
-/* =====================
-   AUDIO (procedurální)
-===================== */
+/* audio */
 let audioCtx;
-
-function playShoot(){
-    let o = audioCtx.createOscillator();
-    let g = audioCtx.createGain();
-    o.frequency.value = 200;
-    g.gain.value = 0.1;
-    o.connect(g); g.connect(audioCtx.destination);
-    o.start();
-    o.stop(audioCtx.currentTime+0.05);
-}
-
-function playEmpty(){
-    let o = audioCtx.createOscillator();
-    o.frequency.value = 100;
+function shootSound(){
+    let o=audioCtx.createOscillator();
     o.connect(audioCtx.destination);
     o.start();
     o.stop(audioCtx.currentTime+0.05);
 }
 
-/* =====================
-   NEPŘÁTELÉ
-===================== */
-let enemies = [];
-let wave = 1;
-let kills = 0;
-
-function spawnWave(){
-    for(let i=0;i<wave+2;i++){
-        let enemy = new THREE.Mesh(
-            new THREE.CapsuleGeometry(0.5,1),
-            new THREE.MeshStandardMaterial({color:0xff0000})
-        );
-        enemy.position.set(Math.random()*60-30,1,Math.random()*60-30);
-        enemy.userData.hp = 3;
-        scene.add(enemy);
-        enemies.push(enemy);
-    }
+/* enemies */
+let enemies=[];
+function spawn(){
+    let e = new THREE.Mesh(
+        new THREE.BoxGeometry(1,2,1),
+        new THREE.MeshStandardMaterial({color:0xff0000})
+    );
+    e.position.set(Math.random()*40-20,1,Math.random()*40-20);
+    scene.add(e);
+    enemies.push(e);
 }
-spawnWave();
+for(let i=0;i<5;i++) spawn();
 
-/* =====================
-   STŘELBA
-===================== */
+/* střelba */
 let raycaster = new THREE.Raycaster();
-
 document.addEventListener('mousedown', ()=>{
     if(!document.pointerLockElement) return;
-
-    if(ammo<=0){
-        playEmpty();
-        return;
-    }
+    if(ammo<=0) return;
 
     ammo--;
-    recoil = 0.2;
-    flash.intensity = 2;
-    playShoot();
+    recoil=0.2;
+    flash.intensity=2;
+    shootSound();
 
     raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
-    let hits = raycaster.intersectObjects(enemies);
-
-    if(hits.length){
-        let e = hits[0].object;
-        e.userData.hp--;
-        if(e.userData.hp<=0){
-            scene.remove(e);
-            enemies.splice(enemies.indexOf(e),1);
-            kills++;
-        }
+    let hit = raycaster.intersectObjects(enemies);
+    if(hit.length){
+        let obj = hit[0].object;
+        scene.remove(obj);
+        enemies.splice(enemies.indexOf(obj),1);
     }
 });
 
-/* reload */
-document.addEventListener('keydown', e=>{
-    if(e.code==="KeyR" && !reloading){
-        reloading = true;
-        setTimeout(()=>{
-            ammo=30;
-            reloading=false;
-        },2000);
-    }
-});
-
-/* =====================
-   GAME LOOP
-===================== */
-let hp = 100;
+/* loop */
+let hp=100;
 
 function animate(){
     requestAnimationFrame(animate);
     let dt = clock.getDelta();
 
-    /* Kamera */
-    camera.rotation.order = "YXZ";
-    camera.rotation.y = yaw;
-    camera.rotation.x = pitch;
+    camera.rotation.order="YXZ";
+    camera.rotation.y=yaw;
+    camera.rotation.x=pitch;
 
-    /* Pohyb */
     direction.set(0,0,0);
-    if(keys['KeyW']) direction.z -=1;
-    if(keys['KeyS']) direction.z +=1;
-    if(keys['KeyA']) direction.x -=1;
-    if(keys['KeyD']) direction.x +=1;
+    if(keys['KeyW']) direction.z-=1;
+    if(keys['KeyS']) direction.z+=1;
+    if(keys['KeyA']) direction.x-=1;
+    if(keys['KeyD']) direction.x+=1;
+
     direction.normalize();
 
-    let speed = 10;
     let forward = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
     let right = new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion);
 
-    velocity.x = (forward.x*direction.z + right.x*direction.x)*speed;
-    velocity.z = (forward.z*direction.z + right.z*direction.x)*speed;
+    velocity.x = (forward.x*direction.z + right.x*direction.x)*10;
+    velocity.z = (forward.z*direction.z + right.z*direction.x)*10;
 
     velocity.y -= 20*dt;
 
     if(onGround && keys['Space']){
-        velocity.y = 8;
-        onGround = false;
+        velocity.y=8;
+        onGround=false;
     }
 
-    camera.position.addScaledVector(velocity, dt);
+    camera.position.addScaledVector(velocity,dt);
 
-    /* Zem */
-    if(camera.position.y < 1.8){
-        camera.position.y = 1.8;
-        velocity.y = 0;
-        onGround = true;
+    if(camera.position.y<1.8){
+        camera.position.y=1.8;
+        velocity.y=0;
+        onGround=true;
     }
 
-    /* Head bobbing */
-    if(direction.length()>0 && onGround){
-        camera.position.y += Math.sin(performance.now()*0.01)*0.05;
-    }
-
-    /* recoil */
     gun.position.z = -1 - recoil;
     recoil *= 0.9;
-
     flash.intensity *= 0.5;
 
-    /* AI */
     enemies.forEach(e=>{
         let dir = camera.position.clone().sub(e.position).normalize();
-        e.position.addScaledVector(dir, dt*(2+wave*0.5));
-        e.lookAt(camera.position);
-
+        e.position.addScaledVector(dir, dt*2);
         if(e.position.distanceTo(camera.position)<1.5){
-            hp -= 20*dt;
+            hp-=20*dt;
         }
     });
 
-    /* další vlna */
-    if(enemies.length===0){
-        wave++;
-        spawnWave();
-    }
-
-    /* HUD */
     document.getElementById('hud').innerHTML =
-        `HP: ${hp.toFixed(0)}<br>Ammo: ${ammo}${reloading?" (Reloading)":""}<br>Kills: ${kills}<br>Wave: ${wave}`;
+        `HP: ${hp.toFixed(0)}<br>Ammo: ${ammo}`;
 
-    /* Game Over */
     if(hp<=0){
-        document.exitPointerLock();
         document.getElementById('gameOver').style.display="flex";
         return;
     }
 
-    renderer.render(scene, camera);
+    renderer.render(scene,camera);
 }
 
 animate();
