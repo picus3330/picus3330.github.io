@@ -1,139 +1,123 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>3D Jewish RPG</title>
-<style>
-  body { margin: 0; overflow: hidden; font-family: Arial; }
-  #info { position: absolute; top: 20px; width: 100%; text-align: center; color: #4b2e83; font-size: 20px; z-index: 1; }
-</style>
+    <meta charset="UTF-8">
+    <title>Jewish 3D Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+            z-index: 1;
+        }
+    </style>
 </head>
 <body>
-<div id="info">Use WASD to move, mouse to look around. Click objects to interact!</div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.0/examples/js/controls/PointerLockControls.js"></script>
+    <div id="score">Score: 0</div>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/examples/js/controls/PointerLockControls.js"></script>
+    <script>
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x20252f);
 
-<script>
-let scene, camera, renderer, controls;
-let objects = [];
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
 
-init();
-animate();
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
 
-function init() {
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf9f5e3);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 7.5);
+        scene.add(directionalLight);
 
-  camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-  camera.position.y = 1.6; // height of player
+        // --- Floor ---
+        const floorGeometry = new THREE.PlaneGeometry(50, 50);
+        const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x444444 });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
 
-  renderer = new THREE.WebGLRenderer({antialias: true});
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+        // --- Player (Camera Control) ---
+        const controls = new THREE.PointerLockControls(camera, renderer.domElement);
+        document.body.addEventListener('click', () => controls.lock());
 
-  // Light
-  const light = new THREE.DirectionalLight(0xffffff, 1);
-  light.position.set(5,10,5);
-  scene.add(light);
-  const ambient = new THREE.AmbientLight(0x404040, 1.5);
-  scene.add(ambient);
+        camera.position.set(0, 1.6, 5); // player height
 
-  // Ground
-  const groundGeo = new THREE.PlaneGeometry(50,50);
-  const groundMat = new THREE.MeshStandardMaterial({color:0xefe6d6});
-  const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.rotation.x = -Math.PI/2;
-  scene.add(ground);
+        // --- Player Movement ---
+        const move = { forward: false, backward: false, left: false, right: false };
+        const velocity = new THREE.Vector3();
+        const speed = 0.1;
 
-  // Controls
-  controls = new THREE.PointerLockControls(camera, renderer.domElement);
-  document.body.addEventListener('click', () => controls.lock(), false);
+        document.addEventListener('keydown', (e) => {
+            if(e.code === 'KeyW') move.forward = true;
+            if(e.code === 'KeyS') move.backward = true;
+            if(e.code === 'KeyA') move.left = true;
+            if(e.code === 'KeyD') move.right = true;
+        });
+        document.addEventListener('keyup', (e) => {
+            if(e.code === 'KeyW') move.forward = false;
+            if(e.code === 'KeyS') move.backward = false;
+            if(e.code === 'KeyA') move.left = false;
+            if(e.code === 'KeyD') move.right = false;
+        });
 
-  // Player movement
-  move = {forward:false, backward:false, left:false, right:false};
-  document.addEventListener('keydown', e => { if(e.code=='KeyW') move.forward=true; if(e.code=='KeyS') move.backward=true; if(e.code=='KeyA') move.left=true; if(e.code=='KeyD') move.right=true; });
-  document.addEventListener('keyup', e => { if(e.code=='KeyW') move.forward=false; if(e.code=='KeyS') move.backward=false; if(e.code=='KeyA') move.left=false; if(e.code=='KeyD') move.right=false; });
+        // --- Collectibles ---
+        const collectibles = [];
+        const collectibleGeometry = new THREE.CylinderGeometry(0, 0.3, 0.5, 4); // dreidel-like
+        const collectibleMaterial = new THREE.MeshStandardMaterial({ color: 0x00ffff });
 
-  // Jewish objects
-  addMenorah(-2,0.25,-5);
-  addShabbatTable(3,0.25,-4);
-  addSynagogue(0,0,-10);
+        for(let i=0; i<10; i++){
+            const collectible = new THREE.Mesh(collectibleGeometry, collectibleMaterial);
+            collectible.position.set((Math.random()-0.5)*40, 0.25, (Math.random()-0.5)*40);
+            scene.add(collectible);
+            collectibles.push(collectible);
+        }
 
-  window.addEventListener('resize', onWindowResize, false);
-}
+        let score = 0;
+        const scoreDiv = document.getElementById('score');
 
-function onWindowResize(){
-  camera.aspect = window.innerWidth/window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
+        // --- Game Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
 
-// --- Add objects ---
-function addMenorah(x,y,z){
-  const base = new THREE.CylinderGeometry(0.2,0.2,0.1,32);
-  const mat = new THREE.MeshStandardMaterial({color:0xffd700});
-  const menorah = new THREE.Mesh(base, mat);
-  menorah.position.set(x,y,z);
-  scene.add(menorah);
-  objects.push({mesh: menorah, type: 'menorah', interacted:false});
-}
+            // Movement
+            velocity.set(0,0,0);
+            if(move.forward) velocity.z -= speed;
+            if(move.backward) velocity.z += speed;
+            if(move.left) velocity.x -= speed;
+            if(move.right) velocity.x += speed;
+            controls.moveRight(velocity.x);
+            controls.moveForward(velocity.z);
 
-function addShabbatTable(x,y,z){
-  const tableGeo = new THREE.BoxGeometry(2,0.3,1);
-  const mat = new THREE.MeshStandardMaterial({color:0x8b4513});
-  const table = new THREE.Mesh(tableGeo, mat);
-  table.position.set(x,y,z);
-  scene.add(table);
-  objects.push({mesh: table, type: 'table', interacted:false});
-}
+            // Check collectibles
+            collectibles.forEach((c, idx) => {
+                if(c.position.distanceTo(camera.position) < 1){
+                    scene.remove(c);
+                    collectibles.splice(idx, 1);
+                    score++;
+                    scoreDiv.innerText = `Score: ${score}`;
+                }
+            });
 
-function addSynagogue(x,y,z){
-  const synGeo = new THREE.BoxGeometry(4,3,4);
-  const mat = new THREE.MeshStandardMaterial({color:0x9999ff});
-  const syn = new THREE.Mesh(synGeo, mat);
-  syn.position.set(x,y+1.5,z);
-  scene.add(syn);
-  objects.push({mesh: syn, type: 'synagogue', interacted:false});
-}
+            renderer.render(scene, camera);
+        }
 
-// --- Interaction ---
-document.addEventListener('click', () => {
-  const raycaster = new THREE.Raycaster();
-  raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
-  const intersects = raycaster.intersectObjects(objects.map(o => o.mesh));
-  if(intersects.length>0){
-    const obj = objects.find(o => o.mesh === intersects[0].object);
-    if(obj.type=='menorah' && !obj.interacted){
-      alert('You light the menorah! 🕎');
-      obj.interacted=true;
-    } else if(obj.type=='table' && !obj.interacted){
-      alert('You see a Shabbat table with candles and challah.');
-      obj.interacted=true;
-    } else if(obj.type=='synagogue' && !obj.interacted){
-      alert('You entered a synagogue! You feel peaceful.');
-      obj.interacted=true;
-    }
-  }
-});
+        animate();
 
-// --- Animation loop ---
-let move = {};
-function animate(){
-  requestAnimationFrame(animate);
-
-  // Movement
-  const speed = 0.05;
-  const dir = new THREE.Vector3();
-  if(move.forward) dir.z -= speed;
-  if(move.backward) dir.z += speed;
-  if(move.left) dir.x -= speed;
-  if(move.right) dir.x += speed;
-  controls.moveRight(dir.x);
-  controls.moveForward(dir.z);
-
-  renderer.render(scene, camera);
-}
-</script>
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
 </body>
 </html>
