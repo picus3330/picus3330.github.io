@@ -2,56 +2,64 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>Mini FPS</title>
+<title>FPS Arena</title>
+
 <style>
-    body { margin:0; overflow:hidden; font-family:Arial; background:#000; }
-    canvas { display:block; }
+body { margin:0; overflow:hidden; font-family:Arial; background:#000; }
+canvas { display:block; }
 
-    #menu, #gameOver {
-        position:absolute; top:0; left:0; width:100%; height:100%;
-        display:flex; flex-direction:column; align-items:center; justify-content:center;
-        background:rgba(0,0,0,0.8); color:white;
-    }
+/* MENU */
+#menu, #gameOver {
+    position:absolute; width:100%; height:100%;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    background:rgba(0,0,0,0.85); color:white;
+    z-index:10;
+}
+button {
+    padding:15px 30px;
+    font-size:20px;
+    cursor:pointer;
+}
 
-    button {
-        padding:15px 30px; font-size:20px; cursor:pointer;
-    }
+/* HUD */
+#hud {
+    position:absolute;
+    top:10px;
+    left:10px;
+    color:white;
+    font-size:18px;
+}
 
-    #hud {
-        position:absolute; top:10px; left:10px; color:white;
-        font-size:18px;
-    }
+/* CROSSHAIR */
+#crosshair {
+    position:absolute;
+    top:50%; left:50%;
+    width:20px; height:20px;
+    margin-left:-10px; margin-top:-10px;
+}
+#crosshair::before, #crosshair::after {
+    content:""; position:absolute; background:white;
+}
+#crosshair::before { left:9px; width:2px; height:20px; }
+#crosshair::after { top:9px; height:2px; width:20px; }
 
-    #crosshair {
-        position:absolute; top:50%; left:50%;
-        width:20px; height:20px; margin-left:-10px; margin-top:-10px;
-    }
-    #crosshair::before, #crosshair::after {
-        content:""; position:absolute; background:white;
-    }
-    #crosshair::before {
-        left:9px; top:0; width:2px; height:20px;
-    }
-    #crosshair::after {
-        top:9px; left:0; height:2px; width:20px;
-    }
-
-    /* 🔥 TVŮJ OBRÁZEK */
-    #overlayImg {
-        position:absolute;
-        bottom:20px;
-        right:20px;
-        width:200px;
-        pointer-events:none;
-        z-index:5;
-        opacity:0.9;
-    }
+/* OVERLAY IMAGE */
+#overlayImg {
+    position:absolute;
+    bottom:20px;
+    right:20px;
+    width:220px;
+    pointer-events:none;
+    opacity:0.9;
+}
 </style>
 </head>
+
 <body>
 
 <div id="menu">
-    <h1>Mini FPS</h1>
+    <h1>FPS Arena</h1>
     <button id="startBtn">START</button>
 </div>
 
@@ -63,22 +71,22 @@
 <div id="hud"></div>
 <div id="crosshair"></div>
 
-<!-- 🔥 SEM STAČÍ DÁT OBRÁZEK -->
 <img id="overlayImg" src="overlay.png">
 
 <script type="importmap">
 {
-    "imports": {
-        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
-    }
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
 }
 </script>
 
 <script type="module">
 import * as THREE from 'three';
 
+/* ================= SETUP ================= */
 let scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xaaaaaa, 10, 80);
+scene.fog = new THREE.Fog(0xaaaaaa, 20, 120);
 
 let camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
 let renderer = new THREE.WebGLRenderer({antialias:true});
@@ -94,46 +102,48 @@ window.addEventListener('resize', ()=>{
 
 let clock = new THREE.Clock();
 
-/* světlo */
-let light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(10,20,10);
-light.castShadow = true;
+/* ================= LIGHT ================= */
+let light = new THREE.DirectionalLight(0xffffff,1);
+light.position.set(20,40,20);
+light.castShadow=true;
 scene.add(light);
 
-/* podlaha */
+/* ================= FLOOR ================= */
 let floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(200,200),
+    new THREE.PlaneGeometry(300,300),
     new THREE.MeshStandardMaterial({color:0x777777})
 );
 floor.rotation.x = -Math.PI/2;
-floor.receiveShadow = true;
+floor.receiveShadow=true;
 scene.add(floor);
 
-/* překážky */
+/* ================= MAP ================= */
 let colliders = [];
-function addBox(x,z){
-    let mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(4,4,4),
+
+function addBox(x,z,w=4,h=4,d=4){
+    let m = new THREE.Mesh(
+        new THREE.BoxGeometry(w,h,d),
         new THREE.MeshStandardMaterial({color:0x555555})
     );
-    mesh.position.set(x,2,z);
-    mesh.castShadow = true;
-    scene.add(mesh);
-}
-for(let i=0;i<15;i++){
-    addBox(Math.random()*80-40, Math.random()*80-40);
+    m.position.set(x,h/2,z);
+    m.castShadow=true;
+    scene.add(m);
+
+    colliders.push(new THREE.Box3().setFromObject(m));
 }
 
-/* player */
+for(let i=0;i<25;i++){
+    addBox(Math.random()*100-50, Math.random()*100-50);
+}
+
+/* ================= PLAYER ================= */
 let velocity = new THREE.Vector3();
-let direction = new THREE.Vector3();
 let keys = {};
-let onGround = false;
+let yaw=0, pitch=0;
+let onGround=false;
 
 document.addEventListener('keydown', e=>keys[e.code]=true);
 document.addEventListener('keyup', e=>keys[e.code]=false);
-
-let yaw=0,pitch=0;
 
 document.getElementById('startBtn').onclick = ()=>{
     document.body.requestPointerLock();
@@ -149,49 +159,59 @@ document.addEventListener('mousemove', e=>{
     }
 });
 
-/* zbraň */
+/* ================= GUN ================= */
 let gun = new THREE.Mesh(
     new THREE.BoxGeometry(0.3,0.3,1),
     new THREE.MeshStandardMaterial({color:0x222222})
 );
-gun.position.set(0.5,-0.5,-1);
+gun.position.set(0.6,-0.6,-1);
 camera.add(gun);
 scene.add(camera);
 
-let ammo=30;
+let ammo=30, reloading=false;
 let recoil=0;
 
-/* flash */
+/* FLASH */
 let flash = new THREE.PointLight(0xffaa55,0,5);
 camera.add(flash);
 
-/* audio */
+/* ================= AUDIO ================= */
 let audioCtx;
+
 function shootSound(){
     let o=audioCtx.createOscillator();
-    o.connect(audioCtx.destination);
-    o.start();
-    o.stop(audioCtx.currentTime+0.05);
+    let g=audioCtx.createGain();
+    o.frequency.value=200;
+    g.gain.value=0.1;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime+0.05);
 }
 
-/* enemies */
+/* ================= ENEMIES ================= */
 let enemies=[];
-function spawn(){
-    let e = new THREE.Mesh(
-        new THREE.BoxGeometry(1,2,1),
-        new THREE.MeshStandardMaterial({color:0xff0000})
-    );
-    e.position.set(Math.random()*40-20,1,Math.random()*40-20);
-    scene.add(e);
-    enemies.push(e);
-}
-for(let i=0;i<5;i++) spawn();
+let wave=1, kills=0;
 
-/* střelba */
+function spawnWave(){
+    for(let i=0;i<wave+2;i++){
+        let e = new THREE.Mesh(
+            new THREE.CapsuleGeometry(0.5,1),
+            new THREE.MeshStandardMaterial({color:0xff0000})
+        );
+        e.position.set(Math.random()*80-40,1,Math.random()*80-40);
+        e.userData.hp=3;
+        scene.add(e);
+        enemies.push(e);
+    }
+}
+spawnWave();
+
+/* ================= SHOOT ================= */
 let raycaster = new THREE.Raycaster();
+
 document.addEventListener('mousedown', ()=>{
     if(!document.pointerLockElement) return;
-    if(ammo<=0) return;
+
+    if(ammo<=0 || reloading) return;
 
     ammo--;
     recoil=0.2;
@@ -200,14 +220,30 @@ document.addEventListener('mousedown', ()=>{
 
     raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
     let hit = raycaster.intersectObjects(enemies);
+
     if(hit.length){
-        let obj = hit[0].object;
-        scene.remove(obj);
-        enemies.splice(enemies.indexOf(obj),1);
+        let e = hit[0].object;
+        e.userData.hp--;
+        if(e.userData.hp<=0){
+            scene.remove(e);
+            enemies.splice(enemies.indexOf(e),1);
+            kills++;
+        }
     }
 });
 
-/* loop */
+/* reload */
+document.addEventListener('keydown', e=>{
+    if(e.code==="KeyR" && !reloading){
+        reloading=true;
+        setTimeout(()=>{
+            ammo=30;
+            reloading=false;
+        },2000);
+    }
+});
+
+/* ================= LOOP ================= */
 let hp=100;
 
 function animate(){
@@ -218,19 +254,21 @@ function animate(){
     camera.rotation.y=yaw;
     camera.rotation.x=pitch;
 
-    direction.set(0,0,0);
-    if(keys['KeyW']) direction.z-=1;
-    if(keys['KeyS']) direction.z+=1;
-    if(keys['KeyA']) direction.x-=1;
-    if(keys['KeyD']) direction.x+=1;
+    let dir = new THREE.Vector3();
 
-    direction.normalize();
+    /* ✅ FIXED CONTROLS */
+    if(keys['KeyW']) dir.z -=1; // dopředu
+    if(keys['KeyS']) dir.z +=1; // dozadu
+    if(keys['KeyA']) dir.x -=1;
+    if(keys['KeyD']) dir.x +=1;
+
+    dir.normalize();
 
     let forward = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
     let right = new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion);
 
-    velocity.x = (forward.x*direction.z + right.x*direction.x)*10;
-    velocity.z = (forward.z*direction.z + right.z*direction.x)*10;
+    velocity.x = (forward.x*dir.z + right.x*dir.x)*10;
+    velocity.z = (forward.z*dir.z + right.z*dir.x)*10;
 
     velocity.y -= 20*dt;
 
@@ -247,22 +285,38 @@ function animate(){
         onGround=true;
     }
 
+    /* HEAD BOB */
+    if(dir.length()>0 && onGround){
+        camera.position.y += Math.sin(performance.now()*0.01)*0.05;
+    }
+
+    /* recoil */
     gun.position.z = -1 - recoil;
     recoil *= 0.9;
     flash.intensity *= 0.5;
 
+    /* AI */
     enemies.forEach(e=>{
-        let dir = camera.position.clone().sub(e.position).normalize();
-        e.position.addScaledVector(dir, dt*2);
+        let d = camera.position.clone().sub(e.position).normalize();
+        e.position.addScaledVector(d, dt*(2+wave*0.3));
+        e.lookAt(camera.position);
+
         if(e.position.distanceTo(camera.position)<1.5){
-            hp-=20*dt;
+            hp -= 20*dt;
         }
     });
 
+    if(enemies.length===0){
+        wave++;
+        spawnWave();
+    }
+
+    /* HUD */
     document.getElementById('hud').innerHTML =
-        `HP: ${hp.toFixed(0)}<br>Ammo: ${ammo}`;
+        `HP: ${hp.toFixed(0)}<br>Ammo: ${ammo}${reloading?" (Reload)":""}<br>Kills: ${kills}<br>Wave: ${wave}`;
 
     if(hp<=0){
+        document.exitPointerLock();
         document.getElementById('gameOver').style.display="flex";
         return;
     }
