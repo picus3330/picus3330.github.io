@@ -1,377 +1,103 @@
 <!DOCTYPE html>
-<html lang="cs">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>FPS Arena</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Dreidel Spinner</title>
 <style>
-body { margin:0; overflow:hidden; font-family:Arial; background:#000; }
-canvas { display:block; }
-
-/* MENU */
-#menu, #gameOver {
-    position:absolute; width:100%; height:100%;
-    display:flex; flex-direction:column;
-    align-items:center; justify-content:center;
-    background:rgba(0,0,0,0.85); color:white;
-    z-index:10;
-}
-button {
-    padding:15px 30px;
-    font-size:20px;
-    cursor:pointer;
-}
-
-/* HUD */
-#hud {
-    position:absolute;
-    top:10px;
-    left:10px;
-    color:white;
-    font-size:18px;
-}
-
-/* CROSSHAIR */
-#crosshair {
-    position:absolute;
-    top:50%; left:50%;
-    width:20px; height:20px;
-    margin-left:-10px; margin-top:-10px;
-}
-#crosshair::before, #crosshair::after {
-    content:""; position:absolute; background:white;
-}
-#crosshair::before { left:9px; width:2px; height:20px; }
-#crosshair::after { top:9px; height:2px; width:20px; }
-
-/* OVERLAY */
-#overlayImg {
-    position:absolute;
-    bottom:20px;
-    right:20px;
-    width:220px;
-    pointer-events:none;
-    opacity:0.9;
-}
-
-/* DAMAGE */
-#damage {
-    position:absolute;
-    width:100%;
-    height:100%;
-    background:red;
-    opacity:0;
-    pointer-events:none;
-}
+    body { margin: 0; background-color: #f9f5e3; overflow: hidden; }
+    #info { position: absolute; top: 20px; width: 100%; text-align: center; font-family: Arial; font-size: 24px; color: #4b2e83; }
+    button { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); padding: 10px 20px; font-size: 18px; cursor: pointer; border: none; border-radius: 5px; background-color: #4b2e83; color: white; }
+    button:hover { background-color: #6b44b0; }
 </style>
 </head>
-
 <body>
+<div id="info">Click "Spin" to spin the dreidel!</div>
+<button onclick="spinDreidel()">Spin</button>
 
-<div id="menu">
-    <h1>FPS Arena</h1>
-    <button id="startBtn">START</button>
-</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
+<script>
+let scene, camera, renderer, dreidel;
 
-<div id="gameOver" style="display:none;">
-    <h1>GAME OVER</h1>
-    <button onclick="location.reload()">RESTART</button>
-</div>
+init();
+animate();
 
-<div id="hud"></div>
-<div id="crosshair"></div>
-<div id="damage"></div>
+function init() {
+    scene = new THREE.Scene();
 
-<img id="overlayImg" src="overlay.png">
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.z = 5;
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
-  }
+    renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Light
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(5,5,5);
+    scene.add(light);
+
+    const ambient = new THREE.AmbientLight(0x404040);
+    scene.add(ambient);
+
+    // Dreidel geometry (simplified as a spinning cone)
+    const geometry = new THREE.CylinderGeometry(0.2, 0.5, 1, 4);
+    const material = new THREE.MeshStandardMaterial({color: 0x4b2e83});
+    dreidel = new THREE.Mesh(geometry, material);
+    scene.add(dreidel);
+
+    // Add Hebrew letters (simplified as colored sides)
+    const sides = ['נ','ג','ה','ש']; // Nun, Gimel, Hei, Shin
+    for(let i=0;i<4;i++){
+        const canvas = document.createElement('canvas');
+        canvas.width = 128; canvas.height = 128;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,128,128);
+        ctx.fillStyle = '#4b2e83'; ctx.font = '80px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(sides[i], 64,64);
+        const tex = new THREE.CanvasTexture(canvas);
+        geometry.groups[i] = {start: i*3, count: 3, materialIndex: i};
+        geometry.faces.forEach((face, idx) => face.materialIndex = idx % 4);
+        dreidel.material = Array(4).fill().map((_, idx) => new THREE.MeshStandardMaterial({map: new THREE.CanvasTexture(canvas)}));
+    }
+
+    window.addEventListener('resize', onWindowResize, false);
 }
-</script>
 
-<script type="module">
-import * as THREE from 'three';
-
-/* === SETUP === */
-let scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xaaaaaa, 20, 120);
-
-let camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
-let renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
-document.body.appendChild(renderer.domElement);
-
-window.addEventListener('resize', ()=>{
-    camera.aspect = innerWidth/innerHeight;
+function onWindowResize(){
+    camera.aspect = window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight);
-});
-
-let clock = new THREE.Clock();
-
-/* === LIGHT === */
-let light = new THREE.DirectionalLight(0xffffff,1);
-light.position.set(20,40,20);
-light.castShadow=true;
-scene.add(light);
-
-/* === FLOOR === */
-let floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(300,300),
-    new THREE.MeshStandardMaterial({color:0x777777})
-);
-floor.rotation.x = -Math.PI/2;
-floor.receiveShadow=true;
-scene.add(floor);
-
-/* === MAP === */
-function addBox(x,z){
-    let m = new THREE.Mesh(
-        new THREE.BoxGeometry(4,4,4),
-        new THREE.MeshStandardMaterial({color:0x555555})
-    );
-    m.position.set(x,2,z);
-    m.castShadow=true;
-    scene.add(m);
-}
-for(let i=0;i<25;i++){
-    addBox(Math.random()*100-50, Math.random()*100-50);
+    renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-/* === PLAYER === */
-let velocity = new THREE.Vector3();
-let keys = {};
-let yaw=0, pitch=0;
-let onGround=false;
+let spinning = false;
+function spinDreidel(){
+    if(spinning) return;
+    spinning = true;
+    let spinTime = 100 + Math.random()*200; // frames
+    let speed = 0.3 + Math.random()*0.5;
+    let frame = 0;
 
-document.addEventListener('keydown', e=>keys[e.code]=true);
-document.addEventListener('keyup', e=>keys[e.code]=false);
-
-document.getElementById('startBtn').onclick = ()=>{
-    document.body.requestPointerLock();
-    document.getElementById('menu').style.display="none";
-    audioCtx = new AudioContext();
-};
-
-document.addEventListener('mousemove', e=>{
-    if(document.pointerLockElement){
-        yaw -= e.movementX*0.002;
-        pitch -= e.movementY*0.002;
-        pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2,pitch));
-    }
-});
-
-/* === GUN SYSTEM === */
-let weapons = {
-    rifle: { ammo:30, max:30, recoil:0.2, damage:1 },
-    sniper: { ammo:5, max:5, recoil:0.5, damage:3 }
-};
-let currentWeapon="rifle";
-let reloading=false;
-let recoil=0;
-
-document.addEventListener('keydown', e=>{
-    if(e.code==="Digit1") currentWeapon="rifle";
-    if(e.code==="Digit2") currentWeapon="sniper";
-});
-
-/* === GUN MODEL === */
-let gun = new THREE.Mesh(
-    new THREE.BoxGeometry(0.3,0.3,1),
-    new THREE.MeshStandardMaterial({color:0x222222})
-);
-gun.position.set(0.6,-0.6,-1);
-camera.add(gun);
-scene.add(camera);
-
-/* === FLASH === */
-let flash = new THREE.PointLight(0xffaa55,0,5);
-camera.add(flash);
-
-/* === AUDIO === */
-let audioCtx;
-function shootSound(){
-    let o=audioCtx.createOscillator();
-    let g=audioCtx.createGain();
-    o.frequency.value=200;
-    g.gain.value=0.1;
-    o.connect(g); g.connect(audioCtx.destination);
-    o.start(); o.stop(audioCtx.currentTime+0.05);
-}
-
-/* === ENEMIES === */
-let enemies=[];
-let wave=1, kills=0;
-
-function spawnWave(){
-    for(let i=0;i<wave+2;i++){
-        let e = new THREE.Mesh(
-            new THREE.CapsuleGeometry(0.5,1),
-            new THREE.MeshStandardMaterial({color:0xff0000})
-        );
-        e.position.set(Math.random()*80-40,1,Math.random()*80-40);
-        e.userData.hp=3;
-
-        let head = new THREE.Mesh(
-            new THREE.SphereGeometry(0.3),
-            new THREE.MeshStandardMaterial({color:0xffaaaa})
-        );
-        head.position.y=1.2;
-        e.add(head);
-        e.userData.head=head;
-
-        scene.add(e);
-        enemies.push(e);
-    }
-}
-spawnWave();
-
-/* === ADS === */
-let aiming=false;
-document.addEventListener('mousedown', e=>{
-    if(e.button===2) aiming=true;
-});
-document.addEventListener('mouseup', e=>{
-    if(e.button===2) aiming=false;
-});
-
-/* === SHOOT === */
-let raycaster = new THREE.Raycaster();
-
-document.addEventListener('mousedown', e=>{
-    if(!document.pointerLockElement || e.button!==0) return;
-
-    let weapon = weapons[currentWeapon];
-    if(weapon.ammo<=0 || reloading) return;
-
-    weapon.ammo--;
-    recoil = weapon.recoil;
-    flash.intensity=2;
-    shootSound();
-
-    raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
-    let hit = raycaster.intersectObjects(enemies, true);
-
-    if(hit.length){
-        let obj = hit[0].object;
-        let parent = obj.parent;
-
-        let dmg = weapon.damage;
-        if(obj === parent.userData.head) dmg *= 3;
-
-        parent.userData.hp -= dmg;
-
-        if(parent.userData.hp<=0){
-            scene.remove(parent);
-            enemies.splice(enemies.indexOf(parent),1);
-            kills++;
+    function spinFrame(){
+        if(frame < spinTime){
+            dreidel.rotation.y += speed;
+            speed *= 0.98; // slow down
+            frame++;
+            requestAnimationFrame(spinFrame);
+        } else {
+            spinning = false;
+            const side = Math.floor((dreidel.rotation.y % (2*Math.PI)) / (Math.PI/2));
+            const letters = ['נ','ג','ה','ש'];
+            document.getElementById('info').innerText = `Dreidel landed on: ${letters[side]}`;
         }
     }
-});
-
-/* === RELOAD === */
-document.addEventListener('keydown', e=>{
-    if(e.code==="KeyR" && !reloading){
-        reloading=true;
-        setTimeout(()=>{
-            weapons[currentWeapon].ammo = weapons[currentWeapon].max;
-            reloading=false;
-        },2000);
-    }
-});
-
-/* === GAME LOOP === */
-let hp=100;
-let damageDiv = document.getElementById('damage');
+    spinFrame();
+}
 
 function animate(){
     requestAnimationFrame(animate);
-    let dt = clock.getDelta();
-
-    camera.rotation.order="YXZ";
-    camera.rotation.y=yaw;
-    camera.rotation.x=pitch;
-
-    let dir = new THREE.Vector3();
-
-    if(keys['KeyW']) dir.z -=1;
-    if(keys['KeyS']) dir.z +=1;
-    if(keys['KeyA']) dir.x -=1;
-    if(keys['KeyD']) dir.x +=1;
-
-    dir.normalize();
-
-    let forward = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
-    let right = new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion);
-
-    velocity.x = (forward.x*dir.z + right.x*dir.x)*10;
-    velocity.z = (forward.z*dir.z + right.z*dir.x)*10;
-
-    velocity.y -= 20*dt;
-
-    if(onGround && keys['Space']){
-        velocity.y=8;
-        onGround=false;
-    }
-
-    camera.position.addScaledVector(velocity,dt);
-
-    if(camera.position.y<1.8){
-        camera.position.y=1.8;
-        velocity.y=0;
-        onGround=true;
-    }
-
-    if(dir.length()>0 && onGround){
-        camera.position.y += Math.sin(performance.now()*0.01)*0.05;
-    }
-
-    gun.position.z = -1 - recoil;
-    recoil *= aiming ? 0.7 : 0.9;
-
-    flash.intensity *= 0.5;
-
-    camera.fov += ((aiming ? 40 : 75) - camera.fov) * 0.1;
-    camera.updateProjectionMatrix();
-
-    enemies.forEach(e=>{
-        let d = camera.position.clone().sub(e.position).normalize();
-        e.position.addScaledVector(d, dt*(2+wave*0.3));
-        e.lookAt(camera.position);
-
-        if(e.position.distanceTo(camera.position)<1.5){
-            hp -= 20*dt;
-        }
-    });
-
-    if(enemies.length===0){
-        wave++;
-        spawnWave();
-    }
-
-    damageDiv.style.opacity = Math.min(0.5,(100-hp)/100);
-
-    document.getElementById('hud').innerHTML =
-        `HP: ${hp.toFixed(0)}<br>
-         Ammo: ${weapons[currentWeapon].ammo}<br>
-         Weapon: ${currentWeapon}<br>
-         Kills: ${kills}<br>
-         Wave: ${wave}`;
-
-    if(hp<=0){
-        document.exitPointerLock();
-        document.getElementById('gameOver').style.display="flex";
-        return;
-    }
-
-    renderer.render(scene,camera);
+    renderer.render(scene, camera);
 }
-
-animate();
 </script>
 </body>
 </html>
