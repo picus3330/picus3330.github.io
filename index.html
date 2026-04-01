@@ -1,1 +1,142 @@
 <iframe width="560" height="315" src="https://www.youtube.com/embed/uQSSb1hbb3o?si=ngdCuhxPDb-vD2aR" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<title>Běhačka – Simpson styl</title>
+<style>
+    body {
+        margin: 0;
+        overflow: hidden;
+        background: #87CEEB;
+        font-family: Arial, sans-serif;
+    }
+    canvas {
+        display: block;
+        background: linear-gradient(#87CEEB, #e0f7ff);
+    }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let player = {
+    x: 100,
+    y: canvas.height - 100,
+    width: 50,
+    height: 50,
+    dy: 0,
+    gravity: 0.8,
+    jumpPower: -15,
+    grounded: true
+};
+
+let obstacles = [];
+let frame = 0;
+let score = 0;
+let gameOver = false;
+
+function drawPlayer() {
+    ctx.fillStyle = "yellow";
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+}
+
+function drawObstacles() {
+    ctx.fillStyle = "red";
+    obstacles.forEach(obs => {
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+    });
+}
+
+function updateObstacles() {
+    if (frame % 100 === 0) {
+        obstacles.push({
+            x: canvas.width,
+            y: canvas.height - 80,
+            width: 40,
+            height: 40
+        });
+    }
+
+    obstacles.forEach(obs => {
+        obs.x -= 6;
+
+        // kolize
+        if (
+            player.x < obs.x + obs.width &&
+            player.x + player.width > obs.x &&
+            player.y < obs.y + obs.height &&
+            player.y + player.height > obs.y
+        ) {
+            gameOver = true;
+        }
+    });
+
+    obstacles = obstacles.filter(obs => obs.x + obs.width > 0);
+}
+
+function drawGround() {
+    ctx.fillStyle = "#228B22";
+    ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+}
+
+function updatePlayer() {
+    player.dy += player.gravity;
+    player.y += player.dy;
+
+    if (player.y >= canvas.height - 100) {
+        player.y = canvas.height - 100;
+        player.dy = 0;
+        player.grounded = true;
+    }
+}
+
+function drawScore() {
+    ctx.fillStyle = "black";
+    ctx.font = "30px Arial";
+    ctx.fillText("Score: " + score, 20, 40);
+}
+
+function gameLoop() {
+    if (gameOver) {
+        ctx.fillStyle = "black";
+        ctx.font = "50px Arial";
+        ctx.fillText("GAME OVER", canvas.width / 2 - 150, canvas.height / 2);
+        return;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    drawGround();
+    drawPlayer();
+    drawObstacles();
+    updatePlayer();
+    updateObstacles();
+    drawScore();
+
+    frame++;
+    score++;
+
+    requestAnimationFrame(gameLoop);
+}
+
+document.addEventListener("keydown", e => {
+    if (e.code === "Space" && player.grounded) {
+        player.dy = player.jumpPower;
+        player.grounded = false;
+    }
+});
+
+gameLoop();
+</script>
+
+</body>
+</html>
