@@ -3,100 +3,136 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>3D Dreidel Spinner</title>
+<title>3D Jewish RPG</title>
 <style>
-    body { margin: 0; background-color: #f9f5e3; overflow: hidden; }
-    #info { position: absolute; top: 20px; width: 100%; text-align: center; font-family: Arial; font-size: 24px; color: #4b2e83; }
-    button { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); padding: 10px 20px; font-size: 18px; cursor: pointer; border: none; border-radius: 5px; background-color: #4b2e83; color: white; }
-    button:hover { background-color: #6b44b0; }
+  body { margin: 0; overflow: hidden; font-family: Arial; }
+  #info { position: absolute; top: 20px; width: 100%; text-align: center; color: #4b2e83; font-size: 20px; z-index: 1; }
 </style>
 </head>
 <body>
-<div id="info">Click "Spin" to spin the dreidel!</div>
-<button onclick="spinDreidel()">Spin</button>
-
+<div id="info">Use WASD to move, mouse to look around. Click objects to interact!</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.0/examples/js/controls/PointerLockControls.js"></script>
+
 <script>
-let scene, camera, renderer, dreidel;
+let scene, camera, renderer, controls;
+let objects = [];
 
 init();
 animate();
 
 function init() {
-    scene = new THREE.Scene();
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xf9f5e3);
 
-    camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 1000);
-    camera.position.z = 5;
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+  camera.position.y = 1.6; // height of player
 
-    renderer = new THREE.WebGLRenderer({antialias: true});
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+  renderer = new THREE.WebGLRenderer({antialias: true});
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
 
-    // Light
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(5,5,5);
-    scene.add(light);
+  // Light
+  const light = new THREE.DirectionalLight(0xffffff, 1);
+  light.position.set(5,10,5);
+  scene.add(light);
+  const ambient = new THREE.AmbientLight(0x404040, 1.5);
+  scene.add(ambient);
 
-    const ambient = new THREE.AmbientLight(0x404040);
-    scene.add(ambient);
+  // Ground
+  const groundGeo = new THREE.PlaneGeometry(50,50);
+  const groundMat = new THREE.MeshStandardMaterial({color:0xefe6d6});
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI/2;
+  scene.add(ground);
 
-    // Dreidel geometry (simplified as a spinning cone)
-    const geometry = new THREE.CylinderGeometry(0.2, 0.5, 1, 4);
-    const material = new THREE.MeshStandardMaterial({color: 0x4b2e83});
-    dreidel = new THREE.Mesh(geometry, material);
-    scene.add(dreidel);
+  // Controls
+  controls = new THREE.PointerLockControls(camera, renderer.domElement);
+  document.body.addEventListener('click', () => controls.lock(), false);
 
-    // Add Hebrew letters (simplified as colored sides)
-    const sides = ['נ','ג','ה','ש']; // Nun, Gimel, Hei, Shin
-    for(let i=0;i<4;i++){
-        const canvas = document.createElement('canvas');
-        canvas.width = 128; canvas.height = 128;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,128,128);
-        ctx.fillStyle = '#4b2e83'; ctx.font = '80px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(sides[i], 64,64);
-        const tex = new THREE.CanvasTexture(canvas);
-        geometry.groups[i] = {start: i*3, count: 3, materialIndex: i};
-        geometry.faces.forEach((face, idx) => face.materialIndex = idx % 4);
-        dreidel.material = Array(4).fill().map((_, idx) => new THREE.MeshStandardMaterial({map: new THREE.CanvasTexture(canvas)}));
-    }
+  // Player movement
+  move = {forward:false, backward:false, left:false, right:false};
+  document.addEventListener('keydown', e => { if(e.code=='KeyW') move.forward=true; if(e.code=='KeyS') move.backward=true; if(e.code=='KeyA') move.left=true; if(e.code=='KeyD') move.right=true; });
+  document.addEventListener('keyup', e => { if(e.code=='KeyW') move.forward=false; if(e.code=='KeyS') move.backward=false; if(e.code=='KeyA') move.left=false; if(e.code=='KeyD') move.right=false; });
 
-    window.addEventListener('resize', onWindowResize, false);
+  // Jewish objects
+  addMenorah(-2,0.25,-5);
+  addShabbatTable(3,0.25,-4);
+  addSynagogue(0,0,-10);
+
+  window.addEventListener('resize', onWindowResize, false);
 }
 
 function onWindowResize(){
-    camera.aspect = window.innerWidth/window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-let spinning = false;
-function spinDreidel(){
-    if(spinning) return;
-    spinning = true;
-    let spinTime = 100 + Math.random()*200; // frames
-    let speed = 0.3 + Math.random()*0.5;
-    let frame = 0;
+// --- Add objects ---
+function addMenorah(x,y,z){
+  const base = new THREE.CylinderGeometry(0.2,0.2,0.1,32);
+  const mat = new THREE.MeshStandardMaterial({color:0xffd700});
+  const menorah = new THREE.Mesh(base, mat);
+  menorah.position.set(x,y,z);
+  scene.add(menorah);
+  objects.push({mesh: menorah, type: 'menorah', interacted:false});
+}
 
-    function spinFrame(){
-        if(frame < spinTime){
-            dreidel.rotation.y += speed;
-            speed *= 0.98; // slow down
-            frame++;
-            requestAnimationFrame(spinFrame);
-        } else {
-            spinning = false;
-            const side = Math.floor((dreidel.rotation.y % (2*Math.PI)) / (Math.PI/2));
-            const letters = ['נ','ג','ה','ש'];
-            document.getElementById('info').innerText = `Dreidel landed on: ${letters[side]}`;
-        }
+function addShabbatTable(x,y,z){
+  const tableGeo = new THREE.BoxGeometry(2,0.3,1);
+  const mat = new THREE.MeshStandardMaterial({color:0x8b4513});
+  const table = new THREE.Mesh(tableGeo, mat);
+  table.position.set(x,y,z);
+  scene.add(table);
+  objects.push({mesh: table, type: 'table', interacted:false});
+}
+
+function addSynagogue(x,y,z){
+  const synGeo = new THREE.BoxGeometry(4,3,4);
+  const mat = new THREE.MeshStandardMaterial({color:0x9999ff});
+  const syn = new THREE.Mesh(synGeo, mat);
+  syn.position.set(x,y+1.5,z);
+  scene.add(syn);
+  objects.push({mesh: syn, type: 'synagogue', interacted:false});
+}
+
+// --- Interaction ---
+document.addEventListener('click', () => {
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+  const intersects = raycaster.intersectObjects(objects.map(o => o.mesh));
+  if(intersects.length>0){
+    const obj = objects.find(o => o.mesh === intersects[0].object);
+    if(obj.type=='menorah' && !obj.interacted){
+      alert('You light the menorah! 🕎');
+      obj.interacted=true;
+    } else if(obj.type=='table' && !obj.interacted){
+      alert('You see a Shabbat table with candles and challah.');
+      obj.interacted=true;
+    } else if(obj.type=='synagogue' && !obj.interacted){
+      alert('You entered a synagogue! You feel peaceful.');
+      obj.interacted=true;
     }
-    spinFrame();
-}
+  }
+});
 
+// --- Animation loop ---
+let move = {};
 function animate(){
-    requestAnimationFrame(animate);
-    renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+
+  // Movement
+  const speed = 0.05;
+  const dir = new THREE.Vector3();
+  if(move.forward) dir.z -= speed;
+  if(move.backward) dir.z += speed;
+  if(move.left) dir.x -= speed;
+  if(move.right) dir.x += speed;
+  controls.moveRight(dir.x);
+  controls.moveForward(dir.z);
+
+  renderer.render(scene, camera);
 }
 </script>
 </body>
