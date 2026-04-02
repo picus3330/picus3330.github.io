@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UvalyBet.cz — Demo Kasino & Trading</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/*═══════════════════════════════════════
+  CSS RESET & VARIABLES
+═══════════════════════════════════════*/
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg-0:#050508;--bg-1:#0b0b11;--bg-2:#111119;--bg-3:#181822;--bg-4:#1f1f2e;
+  --accent:#b8ff00;--accent-d:#8fcc00;--accent-glow:rgba(184,255,0,.15);
+  --red:#ff3355;--green:#00e87b;--gold:#ffcc00;--blue:#3d8bff;--purple:#a855f7;
+  --t1:#f2f2f8;--t2:#9999b0;--t3:#55556e;--border:#222235;
+  --radius:14px;--radius-s:8px;
+  --font:'Sora',sans-serif;--mono:'JetBrains Mono',monospace;
+  --ease:cubic-bezier(.4,0,.2,1);--bounce:cubic-bezier(.34,1.56,.64,1);
+  --shadow-lg:0 25px 80px rgba(0,0,0,.6);
+}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg-0);color:var(--t1);min-height:100vh;overflow-x:hidden}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:var(--bg-0)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:var(--font)}
+input,select{font-family:var(--font)}
+
+/*═══════════════════════════════════════
+  AMBIENT & OVERLAYS
+═══════════════════════════════════════*/
+.noise{position:fixed;inset:0;opacity:.025;pointer-events:none;z-index:9999;
+  background:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E")}
+.glow{position:fixed;border-radius:50%;filter:blur(160px);pointer-events:none;z-index:0;opacity:.06}
+.glow.a{width:700px;height:700px;top:-250px;left:-150px;background:var(--accent)}
+.glow.b{width:500px;height:500px;bottom:-200px;right:-100px;background:var(--blue)}
+.glow.c{width:400px;height:400px;top:40%;left:50%;background:var(--purple)}
+
+/*═══════════════════════════════════════
+  AUTH SCREEN
+═══════════════════════════════════════*/
+#authScreen{position:fixed;inset:0;z-index:5000;display:flex;align-items:center;justify-content:center;
+  background:var(--bg-0)}
+#authScreen.hidden{display:none}
+.auth-container{width:100%;max-width:420px;padding:20px;animation:authIn .6s var(--bounce)}
+@keyframes authIn{from{opacity:0;transform:translateY(30px) scale(.96)}to{opacity:1;transform:none}}
+.auth-logo{text-align:center;margin-bottom:40px}
+.auth-logo h1{font-size:2.4rem;font-weight:800;letter-spacing:-1.5px}
+.auth-logo h1 span{color:var(--accent)}
+.auth-logo p{color:var(--t3);font-size:.85rem;margin-top:6px}
+.auth-box{background:var(--bg-2);border:1px solid var(--border);border-radius:18px;padding:32px;
+  backdrop-filter:blur(20px)}
+.auth-tabs{display:flex;gap:4px;background:var(--bg-1);border-radius:10px;padding:4px;margin-bottom:28px}
+.auth-tab{flex:1;padding:10px;text-align:center;border-radius:8px;font-weight:600;font-size:.9rem;
+  color:var(--t3);border:none;background:transparent;transition:all .25s var(--ease)}
+.auth-tab.active{background:var(--bg-3);color:var(--t1);box-shadow:0 2px 10px rgba(0,0,0,.3)}
+.auth-field{margin-bottom:18px}
+.auth-field label{display:block;font-size:.78rem;font-weight:600;color:var(--t3);margin-bottom:6px;
+  text-transform:uppercase;letter-spacing:.5px}
+.auth-field input{width:100%;padding:14px 16px;background:var(--bg-1);border:1px solid var(--border);
+  border-radius:var(--radius-s);color:var(--t1);font-size:.95rem;outline:none;
+  transition:border .2s,box-shadow .2s}
+.auth-field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+.auth-submit{width:100%;padding:15px;background:var(--accent);color:var(--bg-0);border:none;
+  border-radius:var(--radius-s);font-weight:700;font-size:1rem;margin-top:8px;
+  transition:all .2s var(--ease)}
+.auth-submit:hover{box-shadow:0 8px 30px var(--accent-glow);transform:translateY(-2px)}
+.auth-error{color:var(--red);font-size:.82rem;margin-top:12px;text-align:center;min-height:20px}
+.auth-demo{text-align:center;margin-top:20px;color:var(--t3);font-size:.78rem}
+.auth-demo span{color:var(--red);font-weight:700;text-transform:uppercase;letter-spacing:1px;
+  background:rgba(255,51,85,.1);padding:2px 8px;border-radius:4px}
+
+/*═══════════════════════════════════════
+  TOP BAR
+═══════════════════════════════════════*/
+.topbar{position:fixed;top:0;left:0;right:0;z-index:1000;height:64px;
+  background:rgba(5,5,8,.8);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding:0 28px;
+  transition:transform .3s var(--ease)}
+.topbar.hidden{transform:translateY(-100%)}
+.tb-logo{font-weight:800;font-size:1.4rem;letter-spacing:-1px;display:flex;align-items:center;gap:10px}
+.tb-logo span{color:var(--accent)}
+.tb-dot{width:7px;height:7px;background:var(--accent);border-radius:50%;box-shadow:0 0 10px var(--accent);
+  animation:dotPulse 2s ease-in-out infinite}
+@keyframes dotPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+
+.tb-nav{display:flex;gap:2px}
+.tb-nav button{background:transparent;border:none;color:var(--t2);padding:8px 16px;border-radius:8px;
+  font-weight:500;font-size:.88rem;transition:all .2s var(--ease);position:relative}
+.tb-nav button:hover{color:var(--t1);background:rgba(255,255,255,.04)}
+.tb-nav button.active{color:var(--t1)}
+.tb-nav button.active::after{content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
+  width:16px;height:2px;background:var(--accent);border-radius:1px}
+
+.tb-right{display:flex;align-items:center;gap:14px}
+.badge-demo{background:rgba(255,51,85,.12);color:var(--red);font-size:.65rem;font-weight:700;
+  padding:4px 10px;border-radius:50px;letter-spacing:1px;text-transform:uppercase}
+.bal-box{background:var(--bg-3);border:1px solid var(--border);border-radius:50px;
+  padding:5px 5px 5px 16px;display:flex;align-items:center;gap:10px;
+  transition:all .3s var(--ease)}
+.bal-box:hover{border-color:rgba(255,255,255,.1)}
+.bal-amount{font-family:var(--mono);font-size:.92rem;font-weight:700;color:var(--accent);
+  transition:all .3s var(--ease)}
+.bal-amount.flash{animation:balFlash .5s}
+@keyframes balFlash{0%{transform:scale(1)}50%{transform:scale(1.15);text-shadow:0 0 10px var(--accent)}100%{transform:scale(1)}}
+.bal-cur{color:var(--t3);font-size:.72rem;margin-left:2px}
+.btn-earn{width:32px;height:32px;border-radius:50%;background:var(--accent);color:var(--bg-0);border:none;
+  font-size:1.1rem;font-weight:700;display:flex;align-items:center;justify-content:center;
+  transition:all .25s var(--bounce)}
+.btn-earn:hover{transform:scale(1.15);box-shadow:0 0 20px var(--accent-glow)}
+.btn-user{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--blue));
+  border:none;color:var(--bg-0);font-weight:700;font-size:.85rem;
+  transition:all .25s var(--bounce)}
+.btn-user:hover{transform:scale(1.1)}
+
+/*═══════════════════════════════════════
+  PAGES
+═══════════════════════════════════════*/
+.page{display:none;padding-top:64px;min-height:100vh;position:relative;z-index:1}
+.page.active{display:block;animation:pageIn .4s var(--ease)}
+@keyframes pageIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+/*═══════════════════════════════════════
+  HERO
+═══════════════════════════════════════*/
+.hero{padding:80px 28px 60px;text-align:center}
+.hero h1{font-size:clamp(2.2rem,5.5vw,4.2rem);font-weight:800;letter-spacing:-2px;line-height:1.06}
+.hero h1 .acc{color:var(--accent);position:relative;display:inline-block}
+.hero h1 .acc::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:3px;
+  background:var(--accent);border-radius:2px;opacity:.4}
+.hero p{color:var(--t2);font-size:1.05rem;max-width:480px;margin:18px auto 0;line-height:1.65}
+
+/*═══════════════════════════════════════
+  SECTION
+═══════════════════════════════════════*/
+.sec{padding:40px 28px;max-width:1300px;margin:0 auto}
+.sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+.sec-title{font-size:1.5rem;font-weight:700;letter-spacing:-.5px}
+.sec-title .dot{color:var(--accent)}
+
+/*═══════════════════════════════════════
+  GAME GRID
+═══════════════════════════════════════*/
+.gg{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:18px}
+.gc{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;
+  cursor:pointer;transition:all .4s var(--ease);position:relative}
+.gc:hover{transform:translateY(-8px) scale(1.01);border-color:rgba(184,255,0,.4);
+  box-shadow:0 24px 60px rgba(0,0,0,.5),0 0 50px var(--accent-glow)}
+.gc-vis{height:160px;display:flex;align-items:center;justify-content:center;font-size:3.5rem;
+  position:relative;overflow:hidden;transition:all .4s var(--ease)}
+.gc:hover .gc-vis{transform:scale(1.05)}
+.gc-vis::after{content:'';position:absolute;inset:0;background:linear-gradient(to top,var(--bg-2),transparent 70%)}
+.gc-info{padding:18px 20px}
+.gc-name{font-weight:700;font-size:1.05rem;margin-bottom:4px}
+.gc-desc{color:var(--t2);font-size:.8rem;line-height:1.5;margin-bottom:12px}
+.gc-meta{display:flex;align-items:center;justify-content:space-between}
+.gc-tag{font-size:.68rem;font-weight:600;padding:4px 10px;border-radius:50px;text-transform:uppercase;letter-spacing:.5px}
+.tp{background:rgba(184,255,0,.1);color:var(--accent)}.tn{background:rgba(61,139,255,.1);color:var(--blue)}
+.th{background:rgba(255,51,85,.1);color:var(--red)}.tc{background:rgba(255,204,0,.1);color:var(--gold)}
+.gc-play{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--t1);padding:6px 16px;
+  border-radius:50px;font-size:.76rem;font-weight:600;transition:all .2s var(--ease)}
+.gc-play:hover{background:var(--accent);color:var(--bg-0);border-color:var(--accent)}
+
+.vis-s{background:linear-gradient(135deg,#1a0030,#2d1050)}.vis-ro{background:linear-gradient(135deg,#0d2b0d,#1a4a1a)}
+.vis-bj{background:linear-gradient(135deg,#1a1a0d,#3a3a1a)}.vis-po{background:linear-gradient(135deg,#2d0d0d,#4a1a1a)}
+.vis-di{background:linear-gradient(135deg,#0d1a2d,#1a2d4a)}.vis-cr{background:linear-gradient(135deg,#2d0d1a,#4a1a2d)}
+.vis-mi{background:linear-gradient(135deg,#0d2d2d,#1a4a4a)}.vis-wh{background:linear-gradient(135deg,#2d2d0d,#4a4a1a)}
+.vis-pl{background:linear-gradient(135deg,#1a0d2d,#2d1a4a)}.vis-sc{background:linear-gradient(135deg,#0d2d1a,#1a4a2d)}
+.vis-hi{background:linear-gradient(135deg,#2d1a0d,#4a2d1a)}.vis-ke{background:linear-gradient(135deg,#1a0d1a,#2d1a2d)}
+
+/*═══════════════════════════════════════
+  MODAL
+═══════════════════════════════════════*/
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(12px);z-index:2000;
+  display:none;align-items:center;justify-content:center;padding:16px}
+.modal-ov.open{display:flex}
+.modal-ov.open .modal{animation:mIn .4s var(--bounce)}
+@keyframes mIn{from{opacity:0;transform:translateY(30px) scale(.96)}to{opacity:1;transform:none}}
+.modal{background:var(--bg-1);border:1px solid var(--border);border-radius:20px;width:100%;max-width:820px;
+  max-height:90vh;overflow-y:auto}
+.modal-h{display:flex;align-items:center;justify-content:space-between;padding:22px 26px;
+  border-bottom:1px solid var(--border)}
+.modal-t{font-weight:700;font-size:1.2rem}
+.modal-x{background:var(--bg-3);border:1px solid var(--border);color:var(--t1);width:34px;height:34px;
+  border-radius:50%;font-size:1.1rem;display:flex;align-items:center;justify-content:center;
+  transition:all .2s var(--ease)}
+.modal-x:hover{background:var(--red);border-color:var(--red)}
+.modal-b{padding:26px}
+
+/*═══════════════════════════════════════
+  GAME CONTROLS
+═══════════════════════════════════════*/
+.g-ctrl{display:flex;gap:10px;align-items:center;margin-bottom:22px;flex-wrap:wrap}
+.bet-grp{display:flex;align-items:center;background:var(--bg-3);border:1px solid var(--border);
+  border-radius:var(--radius-s);overflow:hidden}
+.bet-grp label{padding:0 12px;font-size:.75rem;color:var(--t3);white-space:nowrap}
+.bet-in{background:transparent;border:none;color:var(--t1);font-family:var(--mono);font-size:.95rem;
+  padding:12px;width:110px;outline:none}
+.bet-in:focus{box-shadow:inset 0 0 0 1px var(--accent)}
+.bet-b{background:rgba(255,255,255,.04);border:none;color:var(--t2);padding:12px;font-weight:600;
+  font-size:.78rem;transition:all .15s}
+.bet-b:hover{background:rgba(255,255,255,.08);color:var(--t1)}
+.btn-p{background:var(--accent);color:var(--bg-0);border:none;padding:12px 28px;border-radius:var(--radius-s);
+  font-weight:700;font-size:.92rem;transition:all .25s var(--ease)}
+.btn-p:hover{box-shadow:0 6px 24px var(--accent-glow);transform:translateY(-2px)}
+.btn-p:disabled{opacity:.35;pointer-events:none;transform:none;box-shadow:none}
+.btn-s{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--t1);padding:12px 22px;
+  border-radius:var(--radius-s);font-weight:600;font-size:.88rem;transition:all .2s var(--ease)}
+.btn-s:hover{background:rgba(255,255,255,.08)}
+
+.g-res{text-align:center;padding:22px;border-radius:var(--radius);margin-top:18px;font-weight:700;
+  font-size:1.05rem;animation:resPop .4s var(--bounce)}
+.g-res.w{background:rgba(0,232,123,.08);border:1px solid rgba(0,232,123,.25);color:var(--green)}
+.g-res.l{background:rgba(255,51,85,.08);border:1px solid rgba(255,51,85,.25);color:var(--red)}
+@keyframes resPop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+
+/*═══════════════════════════════════════
+  SLOTS
+═══════════════════════════════════════*/
+.slot-row{display:flex;gap:10px;justify-content:center;margin:28px 0}
+.slot-r{width:90px;height:110px;background:var(--bg-3);border:2px solid var(--border);border-radius:var(--radius);
+  display:flex;align-items:center;justify-content:center;font-size:3rem;overflow:hidden;
+  transition:all .3s var(--ease)}
+.slot-r.spin{animation:slotBounce .12s ease infinite alternate;border-color:var(--accent)}
+@keyframes slotBounce{0%{transform:translateY(-4px)}100%{transform:translateY(4px)}}
+.slot-r.done{animation:slotLand .4s var(--bounce);border-color:var(--border)}
+@keyframes slotLand{0%{transform:scale(1.15)}100%{transform:scale(1)}}
+
+/*═══════════════════════════════════════
+  ROULETTE
+═══════════════════════════════════════*/
+.rou-wheel{width:180px;height:180px;border-radius:50%;border:4px solid var(--accent);
+  display:flex;align-items:center;justify-content:center;font-size:2.8rem;font-weight:900;
+  font-family:var(--mono);margin:0 auto 22px;background:var(--bg-3);
+  box-shadow:0 0 40px var(--accent-glow),inset 0 0 50px rgba(0,0,0,.5);
+  transition:all .3s var(--ease)}
+.rou-wheel.spin{animation:rouSpin 2.5s cubic-bezier(.2,.8,.3,1);border-color:var(--gold);
+  box-shadow:0 0 40px rgba(255,204,0,.2)}
+@keyframes rouSpin{0%{transform:rotate(0)}100%{transform:rotate(1080deg)}}
+.rou-bets{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;max-width:380px;margin:0 auto}
+.rou-btn{padding:11px;border-radius:var(--radius-s);border:1px solid var(--border);background:var(--bg-3);
+  color:var(--t1);font-weight:600;font-size:.82rem;transition:all .2s var(--ease)}
+.rou-btn:hover{border-color:var(--accent);background:var(--bg-4)}
+.rou-btn.sel{border-color:var(--accent);background:var(--accent-glow)}
+
+/*═══════════════════════════════════════
+  BLACKJACK
+═══════════════════════════════════════*/
+.bj-t{display:flex;flex-direction:column;align-items:center;gap:28px;margin:22px 0}
+.bj-h{text-align:center}
+.bj-hl{font-size:.75rem;color:var(--t3);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px}
+.bj-cards{display:flex;gap:7px;justify-content:center;min-height:80px}
+.bj-c{width:56px;height:80px;background:#fff;border-radius:7px;display:flex;align-items:center;
+  justify-content:center;font-size:1rem;font-weight:700;color:#1a1a1a;
+  box-shadow:0 4px 14px rgba(0,0,0,.25);animation:deal .35s var(--bounce)}
+.bj-c.r{color:var(--red)}
+@keyframes deal{from{transform:translateY(-24px) rotate(-8deg);opacity:0}to{transform:none;opacity:1}}
+.bj-c.hid{background:linear-gradient(135deg,#1a3a6a,#0d2040);color:transparent;
+  background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.04) 4px,rgba(255,255,255,.04) 8px)}
+.bj-sc{margin-top:6px;font-family:var(--mono);font-weight:700;font-size:1.1rem;color:var(--accent)}
+
+/*═══════════════════════════════════════
+  CRASH
+═══════════════════════════════════════*/
+.crash-mult{font-family:var(--mono);font-size:4.5rem;font-weight:700;text-align:center;margin:20px 0;
+  color:var(--green);transition:color .3s,text-shadow .3s}
+.crash-mult.up{text-shadow:0 0 40px rgba(0,232,123,.3)}
+.crash-mult.dead{color:var(--red);text-shadow:0 0 40px rgba(255,51,85,.3)}
+.crash-bar{width:100%;height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin:12px 0}
+.crash-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--accent));border-radius:4px;
+  transition:width .1s linear;box-shadow:0 0 12px rgba(0,232,123,.4)}
+.crash-fill.dead{background:var(--red);box-shadow:0 0 12px rgba(255,51,85,.4)}
+
+/*═══════════════════════════════════════
+  MINES
+═══════════════════════════════════════*/
+.mines-g{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;max-width:330px;margin:22px auto}
+.mine-c{aspect-ratio:1;background:var(--bg-3);border:1px solid var(--border);border-radius:var(--radius-s);
+  display:flex;align-items:center;justify-content:center;font-size:1.4rem;cursor:pointer;
+  transition:all .25s var(--ease)}
+.mine-c:hover:not(.rev){border-color:var(--accent);background:var(--bg-4);transform:scale(1.08)}
+.mine-c.rev.safe{background:rgba(0,232,123,.1);border-color:var(--green);animation:mineReveal .3s var(--bounce)}
+.mine-c.rev.boom{background:rgba(255,51,85,.1);border-color:var(--red);animation:mineReveal .3s var(--bounce)}
+@keyframes mineReveal{from{transform:scale(0) rotateY(90deg)}to{transform:scale(1) rotateY(0)}}
+
+/*═══════════════════════════════════════
+  DICE
+═══════════════════════════════════════*/
+.dice-face{font-size:5rem;text-align:center;margin:20px 0;transition:transform .3s var(--ease)}
+.dice-face.roll{animation:dRoll .12s ease infinite alternate}
+@keyframes dRoll{0%{transform:rotate(-12deg) scale(1.08)}100%{transform:rotate(12deg) scale(.92)}}
+.dice-slider{width:100%;-webkit-appearance:none;height:6px;border-radius:3px;outline:none;
+  background:linear-gradient(to right,var(--green) 50%,var(--red) 50%)}
+.dice-slider::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;
+  background:var(--accent);cursor:pointer;box-shadow:0 0 10px var(--accent-glow);
+  transition:transform .15s var(--ease)}
+.dice-slider::-webkit-slider-thumb:hover{transform:scale(1.2)}
+
+/*═══════════════════════════════════════
+  STOCKS / TRADING
+═══════════════════════════════════════*/
+.stock-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.stock-card{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;
+  transition:all .3s var(--ease)}
+.stock-card:hover{border-color:rgba(255,255,255,.1);transform:translateY(-4px);
+  box-shadow:0 16px 40px rgba(0,0,0,.4)}
+.stock-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.stock-name{font-weight:700;font-size:1.05rem}
+.stock-sym{font-family:var(--mono);font-size:.78rem;color:var(--t3);background:var(--bg-3);
+  padding:3px 8px;border-radius:4px}
+.stock-price{font-family:var(--mono);font-size:1.8rem;font-weight:700;margin-bottom:4px}
+.stock-change{font-size:.85rem;font-weight:600}
+.stock-change.up{color:var(--green)}.stock-change.down{color:var(--red)}
+.stock-chart{width:100%;height:60px;margin:12px 0}
+.stock-chart canvas{width:100%;height:100%}
+.stock-actions{display:flex;gap:8px;margin-top:14px}
+.stock-btn{flex:1;padding:10px;border-radius:var(--radius-s);border:none;font-weight:600;font-size:.85rem;
+  transition:all .2s var(--ease)}
+.stock-buy{background:rgba(0,232,123,.12);color:var(--green)}
+.stock-buy:hover{background:rgba(0,232,123,.2)}
+.stock-sell{background:rgba(255,51,85,.12);color:var(--red)}
+.stock-sell:hover{background:rgba(255,51,85,.2)}
+.stock-input{width:80px;padding:8px;background:var(--bg-1);border:1px solid var(--border);
+  border-radius:6px;color:var(--t1);font-family:var(--mono);font-size:.85rem;text-align:center;outline:none}
+.stock-input:focus{border-color:var(--accent)}
+.portfolio-box{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);padding:22px;
+  margin-bottom:20px}
+.portfolio-title{font-weight:700;margin-bottom:14px;font-size:1.1rem}
+.pf-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;
+  border-bottom:1px solid rgba(255,255,255,.04)}
+.pf-row:last-child{border-bottom:none}
+
+/*═══════════════════════════════════════
+  CHATBOT
+═══════════════════════════════════════*/
+.chat-toggle{position:fixed;bottom:24px;right:24px;z-index:1500;width:56px;height:56px;border-radius:50%;
+  background:var(--accent);color:var(--bg-0);border:none;font-size:1.5rem;
+  box-shadow:0 8px 30px var(--accent-glow);transition:all .3s var(--bounce)}
+.chat-toggle:hover{transform:scale(1.1)}
+.chat-panel{position:fixed;bottom:90px;right:24px;z-index:1500;width:380px;max-height:500px;
+  background:var(--bg-1);border:1px solid var(--border);border-radius:18px;overflow:hidden;
+  display:none;flex-direction:column;box-shadow:var(--shadow-lg)}
+.chat-panel.open{display:flex;animation:chatIn .35s var(--bounce)}
+@keyframes chatIn{from{opacity:0;transform:translateY(20px) scale(.95)}to{opacity:1;transform:none}}
+.chat-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.chat-head-dot{width:8px;height:8px;background:var(--green);border-radius:50%;
+  box-shadow:0 0 8px var(--green)}
+.chat-head-title{font-weight:700;font-size:.95rem}
+.chat-head-sub{font-size:.72rem;color:var(--t3)}
+.chat-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;
+  max-height:340px}
+.chat-msg{max-width:85%;padding:11px 15px;border-radius:14px;font-size:.85rem;line-height:1.5;
+  animation:msgIn .3s var(--ease)}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.chat-msg.bot{background:var(--bg-3);color:var(--t1);align-self:flex-start;border-bottom-left-radius:4px}
+.chat-msg.user{background:var(--accent);color:var(--bg-0);align-self:flex-end;border-bottom-right-radius:4px;
+  font-weight:500}
+.chat-input-area{padding:12px;border-top:1px solid var(--border);display:flex;gap:8px}
+.chat-input{flex:1;padding:10px 14px;background:var(--bg-3);border:1px solid var(--border);
+  border-radius:10px;color:var(--t1);font-size:.88rem;outline:none}
+.chat-input:focus{border-color:var(--accent)}
+.chat-send{width:38px;height:38px;border-radius:10px;background:var(--accent);color:var(--bg-0);border:none;
+  font-size:1rem;display:flex;align-items:center;justify-content:center;
+  transition:all .2s var(--ease)}
+.chat-send:hover{transform:scale(1.05)}
+
+/*═══════════════════════════════════════
+  EARN / TASKS
+═══════════════════════════════════════*/
+.earn-card{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);padding:24px;
+  margin-bottom:14px;transition:all .3s var(--ease)}
+.earn-card:hover{border-color:rgba(255,255,255,.1)}
+.earn-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.earn-title{font-weight:700;font-size:1.05rem}
+.earn-reward{font-family:var(--mono);font-weight:700;color:var(--accent);font-size:.9rem}
+.earn-desc{color:var(--t2);font-size:.85rem;margin-bottom:16px;line-height:1.5}
+.earn-quiz{margin-top:12px}
+.earn-opt{display:block;width:100%;text-align:left;padding:12px 16px;background:var(--bg-3);border:1px solid var(--border);
+  border-radius:var(--radius-s);color:var(--t1);font-size:.88rem;margin-bottom:8px;
+  transition:all .2s var(--ease)}
+.earn-opt:hover:not(:disabled){border-color:var(--accent);background:var(--bg-4);transform:translateX(4px)}
+.earn-opt.correct{border-color:var(--green);background:rgba(0,232,123,.1);color:var(--green)}
+.earn-opt.wrong{border-color:var(--red);background:rgba(255,51,85,.1);color:var(--red)}
+.earn-opt:disabled{opacity:.6;cursor:default;transform:none}
+.earn-diff{font-size:.68rem;font-weight:600;padding:3px 8px;border-radius:50px;text-transform:uppercase}
+.diff-easy{background:rgba(0,232,123,.1);color:var(--green)}
+.diff-med{background:rgba(255,204,0,.1);color:var(--gold)}
+.diff-hard{background:rgba(255,51,85,.1);color:var(--red)}
+
+/*═══════════════════════════════════════
+  TICKER
+═══════════════════════════════════════*/
+.ticker{background:var(--bg-1);border-bottom:1px solid var(--border);padding:9px 0;overflow:hidden}
+.ticker-inner{display:flex;gap:40px;animation:tickScroll 35s linear infinite;white-space:nowrap}
+@keyframes tickScroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.tick-item{display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--t2)}
+.tick-win{color:var(--green);font-weight:600;font-family:var(--mono)}
+
+/*═══════════════════════════════════════
+  USER MENU
+═══════════════════════════════════════*/
+.user-menu{position:fixed;top:70px;right:28px;z-index:1100;background:var(--bg-2);border:1px solid var(--border);
+  border-radius:var(--radius);padding:8px;width:200px;display:none;
+  box-shadow:var(--shadow-lg)}
+.user-menu.open{display:block;animation:mIn .3s var(--bounce)}
+.user-menu button{display:block;width:100%;text-align:left;padding:10px 14px;border:none;background:transparent;
+  color:var(--t1);font-size:.88rem;border-radius:var(--radius-s);transition:all .15s}
+.user-menu button:hover{background:rgba(255,255,255,.05)}
+
+/*═══════════════════════════════════════
+  TOAST
+═══════════════════════════════════════*/
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--bg-3);
+  border:1px solid var(--border);border-radius:var(--radius);padding:14px 24px;z-index:3000;
+  font-size:.9rem;font-weight:500;pointer-events:none;
+  opacity:0;transition:opacity .3s,transform .3s var(--bounce)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-8px)}
+.toast.tw{border-color:var(--green);color:var(--green)}
+.toast.tl{border-color:var(--red);color:var(--red)}
+
+/*═══════════════════════════════════════
+  RESPONSIVE
+═══════════════════════════════════════*/
+@media(max-width:768px){
+  .topbar{padding:0 14px}.tb-nav{display:none}
+  .hero{padding:50px 16px 30px}.hero h1{font-size:2rem}
+  .sec{padding:28px 14px}.gg{grid-template-columns:1fr}
+  .chat-panel{width:calc(100vw - 32px);right:16px;bottom:86px}
+  .stock-grid{grid-template-columns:1fr}
+  .keno-g{grid-template-columns:repeat(5,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="noise"></div>
+<div class="glow a"></div>
+<div class="glow b"></div>
+<div class="glow c"></div>
+
+<!-- ═══════ AUTH SCREEN ═══════ -->
+<div id="authScreen">
+<div class="auth-container">
+  <div class="auth-logo">
+    <h1>Uvaly<span>Bet</span>.cz</h1>
+    <p>Demo kasino & trading platforma</p>
+  </div>
+  <div class="auth-box">
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuth('login')">Přihlášení</button>
+      <button class="auth-tab" onclick="switchAuth('register')">Registrace</button>
+    </div>
+    <div id="authLogin">
+      <div class="auth-field">
+        <label>Uživatelské jméno</label>
+        <input type="text" id="loginUser" placeholder="Tvoje jméno" autocomplete="off">
+      </div>
+      <div class="auth-field">
+        <label>Heslo</label>
+        <input type="password" id="loginPass" placeholder="••••••••">
+      </div>
+      <button class="auth-submit" onclick="doLogin()">Přihlásit se</button>
+    </div>
+    <div id="authRegister" style="display:none">
+      <div class="auth-field">
+        <label>Uživatelské jméno</label>
+        <input type="text" id="regUser" placeholder="Zvol si jméno" autocomplete="off">
+      </div>
+      <div class="auth-field">
+        <label>Heslo</label>
+        <input type="password" id="regPass" placeholder="Min. 4 znaky">
+      </div>
+      <div class="auth-field">
+        <label>Heslo znovu</label>
+        <input type="password" id="regPass2" placeholder="Zopakuj heslo">
+      </div>
+      <button class="auth-submit" onclick="doRegister()">Vytvořit účet</button>
+    </div>
+    <div class="auth-error" id="authError"></div>
+  </div>
+  <div class="auth-demo">
+    <span>DEMO</span> — Žádné reálné peníze. Pouze pro zábavu.
+  </div>
+</div>
+</div>
+
+<!-- ═══════ TOP BAR ═══════ -->
+<header class="topbar hidden" id="topbar">
+  <div class="tb-logo"><div class="tb-dot"></div>Uvaly<span>Bet</span>.cz</div>
+  <nav class="tb-nav">
+    <button class="active" onclick="showPage('home',this)">Hry</button>
+    <button onclick="showPage('stocks',this)">Akcie</button>
+    <button onclick="showPage('earn',this)">Vydělat</button>
+  </nav>
+  <div class="tb-right">
+    <span class="badge-demo">DEMO</span>
+    <div class="bal-box">
+      <span><span class="bal-amount" id="balDisplay">10 000</span><span class="bal-cur"> CZK</span></span>
+      <button class="btn-earn" onclick="showPage('earn',document.querySelectorAll('.tb-nav button')[2])" title="Vydělat CZK">+</button>
+    </div>
+    <button class="btn-user" id="btnUser" onclick="toggleUserMenu()">?</button>
+  </div>
+</header>
+
+<!-- USER MENU -->
+<div class="user-menu" id="userMenu">
+  <button onclick="toggleUserMenu()">👤 <span id="menuUser">Hráč</span></button>
+  <button onclick="showPage('earn',document.querySelectorAll('.tb-nav button')[2]);toggleUserMenu()">💰 Vydělat CZK</button>
+  <button onclick="doLogout()">🚪 Odhlásit se</button>
+</div>
+
+<!-- ═══════ HOME PAGE ═══════ -->
+<div class="page active" id="pageHome">
+  <div class="ticker"><div class="ticker-inner" id="ticker"></div></div>
+  <div class="hero">
+    <h1>Hraj. Investuj.<br><span class="acc">Bez rizika.</span></h1>
+    <p>Demo kasino a trading platforma s virtuální měnou. Žádné reálné peníze — jen čistý adrenalin.</p>
+  </div>
+  <div class="sec" id="popular">
+    <div class="sec-head"><h2 class="sec-title">Všechny hry<span class="dot">.</span></h2></div>
+    <div class="gg" id="gameGrid"></div>
+  </div>
+</div>
+
+<!-- ═══════ STOCKS PAGE ═══════ -->
+<div class="page" id="pageStocks">
+  <div class="sec">
+    <div class="sec-head"><h2 class="sec-title">Trading<span class="dot">.</span></h2></div>
+    <div class="portfolio-box" id="portfolioBox">
+      <div class="portfolio-title">📊 Tvé portfolio</div>
+      <div id="portfolioList"><p style="color:var(--t3);font-size:.88rem">Zatím nemáš žádné akcie.</p></div>
+    </div>
+    <div class="stock-grid" id="stockGrid"></div>
+  </div>
+</div>
+
+<!-- ═══════ EARN PAGE ═══════ -->
+<div class="page" id="pageEarn">
+  <div class="sec">
+    <div class="sec-head"><h2 class="sec-title">Vydělej CZK<span class="dot">.</span></h2></div>
+    <p style="color:var(--t2);margin-bottom:24px">Odpověz správně na otázky a získej virtuální kredit. Čím těžší otázka, tím vyšší odměna!</p>
+    <div id="earnList"></div>
+    <button class="btn-p" style="margin-top:16px" onclick="generateQuestions()">🔄 Nové otázky</button>
+  </div>
+</div>
+
+<!-- ═══════ MODAL ═══════ -->
+<div class="modal-ov" id="modalOv">
+  <div class="modal">
+    <div class="modal-h">
+      <h3 class="modal-t" id="modalT"></h3>
+      <button class="modal-x" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-b" id="modalB"></div>
+  </div>
+</div>
+
+<!-- ═══════ CHATBOT ═══════ -->
+<button class="chat-toggle" id="chatToggle" onclick="toggleChat()">💬</button>
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-head">
+    <div class="chat-head-dot"></div>
+    <div>
+      <div class="chat-head-title">UvalyBot AI</div>
+      <div class="chat-head-sub">Vždy online • Pomůže s čímkoli</div>
+    </div>
+  </div>
+  <div class="chat-msgs" id="chatMsgs">
+    <div class="chat-msg bot">Ahoj! 👋 Jsem UvalyBot. Můžu ti pomoct s hrami, akciemi nebo čímkoli dalším. Ptej se!</div>
+  </div>
+  <div class="chat-input-area">
+    <input class="chat-input" id="chatInput" placeholder="Napiš zprávu..." onkeydown="if(event.key==='Enter')sendChat()">
+    <button class="chat-send" onclick="sendChat()">➤</button>
+  </div>
+</div>
+
+<!-- ═══════ TOAST ═══════ -->
+<div class="toast" id="toast"></div>
+
+<!-- ═══════ FOOTER ═══════ -->
+<footer class="footer" style="text-align:center;padding:36px 28px;border-top:1px solid var(--border);margin-top:40px;position:relative;z-index:1">
+  <div style="display:flex;justify-content:center;gap:20px;margin-bottom:16px">
+    <a href="#" style="color:var(--t2);font-size:.84rem">Podmínky</a>
+    <a href="#" style="color:var(--t2);font-size:.84rem">Dokumentace</a>
+    <a href="#" style="color:var(--t2);font-size:.84rem">Podpora</a>
+    <a href="#" style="color:var(--t2);font-size:.84rem">Blog</a>
+  </div>
+  <div style="color:var(--t3);font-size:.72rem">© 2026 UvalyBet.cz — Všechna práva vyhrazena.</div>
+  <div style="color:var(--t3);font-size:.68rem;margin-top:10px;max-width:550px;margin-left:auto;margin-right:auto;line-height:1.5">
+    Demo stránka pouze pro zábavu. Nepoužívají se žádné reálné peníze. Veškerá měna je smyšlená. Neslouží jako propagace hazardu.
+  </div>
+</footer>
+
+<script>
+/*═══════════════════════════════════════════
+  STATE
+═══════════════════════════════════════════*/
+let U = null; // current user object
+const LS = key => JSON.parse(localStorage.getItem(key) || 'null');
+const SS = (key, val) => localStorage.setItem(key, JSON.stringify(val));
+
+/*═══════════════════════════════════════════
+  AUTH
+═══════════════════════════════════════════*/
+function switchAuth(mode) {
+  document.getElementById('authLogin').style.display = mode === 'login' ? 'block' : 'none';
+  document.getElementById('authRegister').style.display = mode === 'register' ? 'block' : 'none';
+  document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', (mode==='login'?i===0:i===1)));
+  document.getElementById('authError').textContent = '';
+}
+
+function doRegister() {
+  const user = document.getElementById('regUser').value.trim();
+  const pass = document.getElementById('regPass').value;
+  const pass2 = document.getElementById('regPass2').value;
+  const err = document.getElementById('authError');
+  if (!user || user.length < 2) return err.textContent = 'Jméno musí mít alespoň 2 znaky.';
+  if (pass.length < 4) return err.textContent = 'Heslo musí mít alespoň 4 znaky.';
+  if (pass !== pass2) return err.textContent = 'Hesla se neshodují.';
+  const users = LS('ub_users') || {};
+  if (users[user]) return err.textContent = 'Uživatel již existuje.';
+  users[user] = { pass, balance: 10000, portfolio: {}, stats: { wins: 0, losses: 0 } };
+  SS('ub_users', users);
+  SS('ub_current', user);
+  loginAs(user);
+}
+
+function doLogin() {
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const err = document.getElementById('authError');
+  const users = LS('ub_users') || {};
+  if (!users[user]) return err.textContent = 'Uživatel neexistuje.';
+  if (users[user].pass !== pass) return err.textContent = 'Špatné heslo.';
+  SS('ub_current', user);
+  loginAs(user);
+}
+
+function loginAs(name) {
+  const users = LS('ub_users') || {};
+  U = { name, ...users[name] };
+  document.getElementById('authScreen').classList.add('hidden');
+  document.getElementById('topbar').classList.remove('hidden');
+  document.getElementById('btnUser').textContent = name[0].toUpperCase();
+  document.getElementById('menuUser').textContent = name;
+  updateBalUI();
+}
+
+function doLogout() {
+  saveUser();
+  U = null;
+  SS('ub_current', null);
+  document.getElementById('authScreen').classList.remove('hidden');
+  document.getElementById('topbar').classList.add('hidden');
+  toggleUserMenu(true);
+}
+
+function saveUser() {
+  if (!U) return;
+  const users = LS('ub_users') || {};
+  users[U.name] = { pass: users[U.name]?.pass || '', balance: U.balance, portfolio: U.portfolio, stats: U.stats };
+  SS('ub_users', users);
+}
+
+// Auto login
+(function autoLogin() {
+  const cur = LS('ub_current');
+  if (cur) {
+    const users = LS('ub_users') || {};
+    if (users[cur]) loginAs(cur);
+  }
+})();
+
+/*═══════════════════════════════════════════
+  BALANCE
+═══════════════════════════════════════════*/
+function updateBal(amount) {
+  U.balance += amount;
+  if (U.balance < 0) U.balance = 0;
+  updateBalUI();
+  saveUser();
+}
+function updateBalUI() {
+  const el = document.getElementById('balDisplay');
+  el.textContent = U.balance.toLocaleString('cs-CZ');
+  el.classList.remove('flash');
+  void el.offsetWidth;
+  el.classList.add('flash');
+}
+
+/*═══════════════════════════════════════════
+  TOAST
+═══════════════════════════════════════════*/
+function toast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type === 'w' ? ' tw' : type === 'l' ? ' tl' : '');
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(() => t.className = 'toast', 2800);
+}
+
+/*═══════════════════════════════════════════
+  NAVIGATION
+═══════════════════════════════════════════*/
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const map = { home: 'pageHome', stocks: 'pageStocks', earn: 'pageEarn' };
+  document.getElementById(map[id]).classList.add('active');
+  document.querySelectorAll('.tb-nav button').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function toggleUserMenu(forceClose) {
+  const m = document.getElementById('userMenu');
+  if (forceClose) m.classList.remove('open');
+  else m.classList.toggle('open');
+}
+
+function closeModal() { document.getElementById('modalOv').classList.remove('open'); }
+function openModal(title, fn) {
+  document.getElementById('modalT').textContent = title;
+  document.getElementById('modalB').innerHTML = '';
+  fn(document.getElementById('modalB'));
+  document.getElementById('modalOv').classList.add('open');
+}
+document.getElementById('modalOv').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+/*═══════════════════════════════════════════
+  GAME DATA & GRID
+═══════════════════════════════════════════*/
+const GAMES = [
+  { id:'slots',name:'Automaty',desc:'Klasické výherní automaty. Tři stejné = jackpot!',icon:'🎰',vis:'vis-s',tag:'Populární',tc:'tp'},
+  { id:'roulette',name:'Ruleta',desc:'Evropská ruleta. Vsaď na číslo, barvu nebo rozsah.',icon:'🎡',vis:'vis-ro',tag:'Klasika',tc:'tc'},
+  { id:'blackjack',name:'Blackjack',desc:'Poraz dealera! Dostaň se co nejblíž k 21.',icon:'🃏',vis:'vis-bj',tag:'Populární',tc:'tp'},
+  { id:'crash',name:'Crash',desc:'Multiplikátor roste — vyber včas, než crashne!',icon:'📈',vis:'vis-cr',tag:'Hot',tc:'th'},
+  { id:'mines',name:'Miny',desc:'Odkrývej bezpečná pole, vyhni se minám.',icon:'💣',vis:'vis-mi',tag:'Hot',tc:'th'},
+  { id:'dice',name:'Kostky',desc:'Hoď kostkou a hádej vyšší nebo nižší.',icon:'🎲',vis:'vis-di',tag:'Nové',tc:'tn'},
+  { id:'wheel',name:'Kolo štěstí',desc:'Roztočte kolo a čekejte na osud!',icon:'🎯',vis:'vis-wh',tag:'Klasika',tc:'tc'},
+  { id:'coinflip',name:'Coin Flip',desc:'Orel nebo panna? Klasická fifty-fifty.',icon:'🪙',vis:'vis-hi',tag:'Nové',tc:'tn'},
+  { id:'hilo',name:'Hi-Lo',desc:'Bude další karta vyšší nebo nižší?',icon:'⬆️',vis:'vis-hi',tag:'Nové',tc:'tn'},
+  { id:'keno',name:'Keno',desc:'Vyber čísla a čekej na tah!',icon:'🔢',vis:'vis-ke',tag:'Klasika',tc:'tc'},
+  { id:'plinko',name:'Plinko',desc:'Pusť míček a sleduj kam dopadne.',icon:'⚪',vis:'vis-pl',tag:'Hot',tc:'th'},
+  { id:'scratch',name:'Stírací los',desc:'Stírej pole a hledej výherní kombinaci!',icon:'🎟️',vis:'vis-sc',tag:'Nové',tc:'tn'},
+];
+
+const grid = document.getElementById('gameGrid');
+GAMES.forEach(g => {
+  grid.innerHTML += `<div class="gc" onclick="launchGame('${g.id}')">
+    <div class="gc-vis ${g.vis}">${g.icon}</div>
+    <div class="gc-info"><div class="gc-name">${g.name}</div><div class="gc-desc">${g.desc}</div>
+    <div class="gc-meta"><span class="gc-tag ${g.tc}">${g.tag}</span>
+    <button class="gc-play" onclick="event.stopPropagation();launchGame('${g.id}')">Hrát</button></div></div></div>`;
+});
+
+// Ticker
+const tNames=['Hráč_007','Lucky_CZ','VIPKarel','NoobMaster','Šťastný42','JanaK','PetrXL','MirekPro','Boss888','Kuba77'];
+const tGames=['Automaty','Ruleta','Blackjack','Crash','Miny','Kostky','Kolo štěstí','Coin Flip'];
+let tHTML='';
+for(let i=0;i<24;i++){
+  const n=tNames[Math.floor(Math.random()*tNames.length)],g=tGames[Math.floor(Math.random()*tGames.length)];
+  const a=(Math.floor(Math.random()*80)+1)*100;
+  tHTML+=`<div class="tick-item">🏆 ${n} vyhrál <span class="tick-win">${a.toLocaleString('cs-CZ')} CZK</span> v ${g}</div>`;
+}
+document.getElementById('ticker').innerHTML=tHTML+tHTML;
+
+function launchGame(id) {
+  const g = GAMES.find(x=>x.id===id);
+  openModal(g.icon+' '+g.name, b => window['game_'+id](b));
+}
+
+/*═══════════════════════════════════════════
+  GAME: SLOTS
+═══════════════════════════════════════════*/
+function game_slots(B) {
+  const SYM = ['🍒','🍋','🍊','🍇','⭐','💎','7️⃣','🔔'];
+  B.innerHTML = `<div class="g-ctrl">
+    <div class="bet-grp"><label>Sázka</label><input type="number" class="bet-in" id="slBet" value="100" min="10" step="10">
+    <button class="bet-b" onclick="document.getElementById('slBet').value=Math.min(U.balance,+document.getElementById('slBet').value*2)">2×</button>
+    <button class="bet-b" onclick="document.getElementById('slBet').value=Math.max(10,Math.floor(+document.getElementById('slBet').value/2))">½</button></div>
+    <button class="btn-p" id="slSpin" onclick="slSpin()">🎰 Zatočit</button></div>
+    <div class="slot-row">${[0,1,2,3,4].map(i=>`<div class="slot-r" id="sr${i}">${SYM[i]}</div>`).join('')}</div>
+    <div id="slRes"></div>`;
+
+  window.slSpin = function() {
+    const bet=+document.getElementById('slBet').value||100;
+    if(bet>U.balance)return toast('Nedostatek kreditu!','l');
+    updateBal(-bet);
+    const reels=[0,1,2,3,4].map(i=>document.getElementById('sr'+i));
+    reels.forEach(r=>{r.classList.remove('done');r.classList.add('spin')});
+    document.getElementById('slSpin').disabled=true;
+    const res=Array.from({length:5},()=>SYM[Math.floor(Math.random()*SYM.length)]);
+    reels.forEach((r,i)=>{setTimeout(()=>{r.classList.remove('spin');r.classList.add('done');r.textContent=res[i]},400+i*280)});
+    setTimeout(()=>{
+      document.getElementById('slSpin').disabled=false;
+      const cnt={};res.forEach(s=>cnt[s]=(cnt[s]||0)+1);const mx=Math.max(...Object.values(cnt));
+      let w=0;if(mx===5)w=bet*50;else if(mx===4)w=bet*10;else if(mx===3)w=bet*3;
+      if(w>0){updateBal(w);U.stats.wins++;document.getElementById('slRes').innerHTML=`<div class="g-res w">🎉 Výhra ${w.toLocaleString('cs-CZ')} CZK! (${mx}× stejný)</div>`}
+      else{U.stats.losses++;document.getElementById('slRes').innerHTML=`<div class="g-res l">Žádná výhra</div>`}
+      saveUser();
+    },400+4*280+150);
+  };
+}
+
+/*═══════════════════════════════════════════
+  GAME: ROULETTE
+═══════════════════════════════════════════*/
+function game_roulette(B) {
+  let selBet=null;
+  B.innerHTML=`<div class="g-ctrl">
+    <div class="bet-grp"><label>Sázka</label><input type="number" class="bet-in" id="roBet" value="100" min="10" step="10"></div>
+    <button class="btn-p" id="roSpin" onclick="roSpin()">Zatočit</button></div>
+    <div style="text-align:center"><div class="rou-wheel" id="roW"><span id="roN">0</span></div>
+    <div class="rou-bets">
+      <button class="rou-btn" style="border-color:var(--red)" onclick="roSel(this,'red')">🔴 Červená</button>
+      <button class="rou-btn" style="border-color:var(--green)" onclick="roSel(this,'green')">🟢 Zelená</button>
+      <button class="rou-btn" style="border-color:#666" onclick="roSel(this,'black')">⚫ Černá</button>
+      <button class="rou-btn" onclick="roSel(this,'1-18')">1–18</button>
+      <button class="rou-btn" onclick="roSel(this,'19-36')">19–36</button>
+      <button class="rou-btn" onclick="roSel(this,'even')">Sudá</button>
+      <button class="rou-btn" onclick="roSel(this,'odd')">Lichá</button>
+      <button class="rou-btn" onclick="roSel(this,'1st12')">1.–12.</button>
+      <button class="rou-btn" onclick="roSel(this,'3rd12')">25.–36.</button>
+    </div></div><div id="roRes"></div>`;
+  window.roSel=function(el,t){document.querySelectorAll('.rou-btn').forEach(b=>b.classList.remove('sel'));el.classList.add('sel');selBet=t};
+  window.roSpin=function(){
+    if(!selBet)return toast('Vyber sázku!','');
+    const bet=+document.getElementById('roBet').value||100;if(bet>U.balance)return toast('Nedostatek!','l');
+    updateBal(-bet);document.getElementById('roSpin').disabled=true;
+    const w=document.getElementById('roW');w.classList.add('spin');
+    const r=Math.floor(Math.random()*37),reds=[1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
+    const isR=reds.includes(r),isG=r===0,col=isG?'green':isR?'red':'black';
+    setTimeout(()=>{
+      w.classList.remove('spin');document.getElementById('roN').textContent=r;
+      w.style.borderColor=col==='red'?'var(--red)':col==='green'?'var(--green)':'#666';
+      let win=0;
+      if(selBet==='red'&&isR)win=bet*2;else if(selBet==='black'&&!isR&&!isG)win=bet*2;
+      else if(selBet==='green'&&isG)win=bet*35;else if(selBet==='1-18'&&r>=1&&r<=18)win=bet*2;
+      else if(selBet==='19-36'&&r>=19)win=bet*2;else if(selBet==='even'&&r>0&&r%2===0)win=bet*2;
+      else if(selBet==='odd'&&r%2===1)win=bet*2;else if(selBet==='1st12'&&r>=1&&r<=12)win=bet*3;
+      else if(selBet==='3rd12'&&r>=25)win=bet*3;
+      document.getElementById('roSpin').disabled=false;
+      if(win>0){updateBal(win);U.stats.wins++;document.getElementById('roRes').innerHTML=`<div class="g-res w">${r} ${col==='red'?'🔴':col==='green'?'🟢':'⚫'} — Výhra ${win.toLocaleString('cs-CZ')} CZK!</div>`}
+      else{U.stats.losses++;document.getElementById('roRes').innerHTML=`<div class="g-res l">${r} ${col==='red'?'🔴':col==='green'?'🟢':'⚫'} — Prohra</div>`}
+      saveUser();
+    },2600);
+  };
+}
+
+/*═══════════════════════════════════════════
+  GAME: BLACKJACK
+═══════════════════════════════════════════*/
+function game_blackjack(B){
+  const suits=['♠','♥','♦','♣'],ranks=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  let dk,pH,dH,active;
+  function newDk(){const d=[];suits.forEach(s=>ranks.forEach(r=>d.push({r,s})));for(let i=d.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[d[i],d[j]]=[d[j],d[i]]}return d}
+  function val(h){let v=0,a=0;h.forEach(c=>{if('JQK'.includes(c.r[0])&&c.r!=='10')v+=10;else if(c.r==='A'){v+=11;a++}else v+=+c.r});while(v>21&&a>0){v-=10;a--}return v}
+  function rc(c,hid){if(hid)return`<div class="bj-c hid"></div>`;return`<div class="bj-c${c.s==='♥'||c.s==='♦'?' r':''}">${c.r}${c.s}</div>`}
+  function render(show){
+    document.getElementById('bjP').innerHTML=pH.map(c=>rc(c)).join('');
+    document.getElementById('bjPS').textContent=val(pH);
+    if(show){document.getElementById('bjD').innerHTML=dH.map(c=>rc(c)).join('');document.getElementById('bjDS').textContent=val(dH)}
+    else{document.getElementById('bjD').innerHTML=rc(dH[0])+rc(null,1);document.getElementById('bjDS').textContent='?'}}
+  B.innerHTML=`<div class="g-ctrl"><div class="bet-grp"><label>Sázka</label><input type="number" class="bet-in" id="bjBet" value="200" min="10"></div>
+    <button class="btn-p" id="bjDeal" onclick="bjDeal()">Rozdat</button></div>
+    <div class="bj-t"><div class="bj-h"><div class="bj-hl">Dealer</div><div class="bj-cards" id="bjD"></div><div class="bj-sc" id="bjDS">-</div></div>
+    <div class="bj-h"><div class="bj-hl">Ty</div><div class="bj-cards" id="bjP"></div><div class="bj-sc" id="bjPS">-</div></div>
+    <div id="bjAct" style="display:none;display:flex;gap:10px;display:none"><button class="btn-p" onclick="bjHit()">Hit</button><button class="btn-s" onclick="bjStand()">Stand</button></div></div>
+    <div id="bjRes"></div>`;
+  window.bjDeal=function(){const bet=+document.getElementById('bjBet').value||200;if(bet>U.balance)return toast('Nedostatek!','l');
+    updateBal(-bet);window._bjB=bet;dk=newDk();pH=[dk.pop(),dk.pop()];dH=[dk.pop(),dk.pop()];active=true;
+    document.getElementById('bjAct').style.display='flex';document.getElementById('bjDeal').disabled=true;document.getElementById('bjRes').innerHTML='';
+    render(false);if(val(pH)===21)bjStand()};
+  window.bjHit=function(){if(!active)return;pH.push(dk.pop());render(false);if(val(pH)>21)bjEnd()};
+  window.bjStand=function(){if(!active)return;active=false;while(val(dH)<17)dH.push(dk.pop());bjEnd()};
+  function bjEnd(){active=false;render(true);document.getElementById('bjAct').style.display='none';document.getElementById('bjDeal').disabled=false;
+    const pv=val(pH),dv=val(dH),bet=window._bjB;let msg='',w=0;
+    if(pv>21)msg='Přetáhls!';else if(dv>21){msg='Dealer přetáhl!';w=bet*2}else if(pv>dv){msg=pv+' vs '+dv+' — Výhra!';w=bet*2}
+    else if(pv===dv){msg='Remíza!';w=bet}else msg=pv+' vs '+dv+' — Prohra.';
+    if(w>0){updateBal(w);U.stats.wins++}else if(w===0&&msg!=='Remíza!')U.stats.losses++;saveUser();
+    document.getElementById('bjRes').innerHTML=`<div class="g-res ${w>0?'w':'l'}">${msg}${w>0?' +'+w.toLocaleString('cs-CZ')+' CZK':''}</div>`}
+}
+
+/*═══════════════════════════════════════════
+  GAME: CRASH
+═══════════════════════════════════════════*/
+function game_crash(B){
+  B.innerHTML=`<div class="g-ctrl"><div class="bet-grp"><label>Sázka</label><input type="number" class="bet-in" id="crBet" value="100" min="10"></div>
+    <button class="btn-p" id="crStart" onclick="crStart()">Start</button>
+    <button class="btn-s" id="crCash" onclick="crCash()" style="display:none">💰 Vybrat</button></div>
+    <div class="crash-mult" id="crM">1.00×</div>
+    <div class="crash-bar"><div class="crash-fill" id="crF" style="width:0%"></div></div>
+    <div id="crRes"></div>`;
+  let iv,mult,dead,out;
+  window.crStart=function(){const bet=+document.getElementById('crBet').value||100;if(bet>U.balance)return toast('Nedostatek!','l');
+    updateBal(-bet);window._crB=bet;mult=1;dead=false;out=false;
+    document.getElementById('crStart').style.display='none';document.getElementById('crCash').style.display='inline-flex';
+    document.getElementById('crRes').innerHTML='';const mE=document.getElementById('crM'),fE=document.getElementById('crF');
+    mE.className='crash-mult up';fE.className='crash-fill';fE.style.width='0%';
+    const cp=1+Math.random()*Math.random()*18;
+    iv=setInterval(()=>{mult+=.02+(mult-1)*.004;mE.textContent=mult.toFixed(2)+'×';
+      fE.style.width=Math.min((mult-1)/cp*100,100)+'%';
+      if(mult>=cp&&!out){clearInterval(iv);dead=true;mE.textContent=mult.toFixed(2)+'×';mE.className='crash-mult dead';
+        fE.className='crash-fill dead';U.stats.losses++;saveUser();
+        document.getElementById('crStart').style.display='inline-flex';document.getElementById('crCash').style.display='none';
+        document.getElementById('crRes').innerHTML=`<div class="g-res l">💥 Crash na ${mult.toFixed(2)}×!</div>`}
+    },50)};
+  window.crCash=function(){if(dead||out)return;out=true;clearInterval(iv);const w=Math.floor(window._crB*mult);
+    updateBal(w);U.stats.wins++;saveUser();
+    document.getElementById('crStart').style.display='inline-flex';document.getElementById('crCash').style.display='none';
+    document.getElementById('crRes').innerHTML=`<div class="g-res w">💰 Vybráno ${mult.toFixed(2)}× — +${w.toLocaleString('cs-CZ')} CZK!</div>`};
+}
+
+/*═══════════════════════════════════════════
+  GAME: MINES
+═══════════════════════════════════════════*/
+function game_mines(B){
+  const SZ=25,MC=5;let mines,rev,over,safe;
+  B.innerHTML=`<div class="g-ctrl"><div class="bet-grp"><label>Sázka</label><input type="number" class="bet-in" id="mnBet" value="100" min="10"></div>
+    <button class="btn-p" id="mnStart" onclick="mnStart()">Nová hra</button>
+    <button class="btn-s" id="mnCash" onclick="mnCash()" style="display:none">💰 Vybrat</button>
+    <span id="mnMult" style="font-family:var(--mono);color:var(--accent);font-weight:700"></span></div>
+    <div class="mines-g" id="mnG"></div><div id="mnRes"></div>`;
+  function renderM(){const g=document.getElementById('mnG');g.innerHTML='';for(let i=0;i<SZ;i++){
+    const c=document.createElement('div');c.className='mine-c';
+    if(rev.has(i)){c.classList.add('rev');if(mines.has(i)){c.classList.add('boom');c.textContent='💣'}else{c.classList.add('safe');c.textContent='💎'}}
+    c.onclick=()=>mnClick(i);g.appendChild(c)}}
+  window.mnStart=function(){const bet=+document.getElementById('mnBet').value||100;if(bet>U.balance)return toast('Nedostatek!','l');
+    updateBal(-bet);window._mnB=bet;mines=new Set();while(mines.size<MC)mines.add(Math.floor(Math.random()*SZ));
+    rev=new Set();over=false;safe=0;document.getElementById('mnStart').style.display='none';
+    document.getElementById('mnCash').style.display='inline-flex';document.getElementById('mnRes').innerHTML='';
+    document.getElementById('mnMult').textContent='1.00×';renderM()};
+  function mnClick(i){if(over||rev.has(i))return;rev.add(i);
+    if(mines.has(i)){over=true;mines.forEach(m=>rev.add(m));renderM();U.stats.losses++;saveUser();
+      document.getElementById('mnStart').style.display='inline-flex';document.getElementById('mnCash').style.display='none';
+      document.getElementById('mnRes').innerHTML=`<div class="g-res l">💣 Bomba!</div>`}
+    else{safe++;document.getElementById('mnMult').textContent=(1+safe*.25).toFixed(2)+'×';renderM()}}
+  window.mnCash=function(){if(over)return;over=true;const m=1+safe*.25,w=Math.floor(window._mnB*m);
+    updateBal(w);U.stats.wins++;saveUser();mines.forEach(m=>rev.add(m));renderM();
+    document.getElementById('mnStart').style.display='inline-flex';document.getElementById('mnCash').style.display='none';
+    document.getElementById('mnRes').innerHTML=`<div class="g-res w">💰 ${m.toFixed(2)}× — +${w.toLocaleString('cs-CZ')} CZK!</div>`};
+}
+
+/*═══════════════════════════════════════════
+  GAME: DICE
+═══════════════════════════════════════════*/
+function game_dice(B){let tgt=50;
+  B.innerHTML=`<div class="g-ctrl"><div class="bet-grp"><label>Sázka</label><input type="number" class="bet-in" id="diBet" value="100" min="10"></div>
+    <button class="btn-p" onclick="diRoll()">🎲 Hodit</button></div>
+    <div style="text-align:center"><div class="dice-face" id="diF">🎲</div>
+    <div style="max-width:380px;margin:0 auto"><input type="range" class="dice-slider" id="diS" min="5" max="95" value="50" oninput="diUpd(this.value)">
+    <div style="display:flex;justify-content:space-between;color:var(--t2);font-size:.83rem;margin-top:6px">
+    <span>Pod <span id="diT">50</span></span><span style="color:var(--accent)"><span id="diM">1.96</span>×</span><span>Šance: <span id="diC">50</span>%</span></div></div></div>
+    <div id="diRes"></div>`;
+  window.diUpd=function(v){tgt=+v;document.getElementById('diT').textContent=tgt;
+    document.getElementById('diC').textContent=tgt;document.getElementById('diM').textContent=(98/tgt).toFixed(2);
+    document.getElementById('diS').style.background=`linear-gradient(to right,var(--green) ${tgt}%,var(--red) ${tgt}%)`};
+  window.diRoll=function(){const bet=+document.getElementById('diBet').value||100;if(bet>U.balance)return toast('Nedostatek!','l');
+    updateBal(-bet);const f=document.getElementById('diF');f.classList.add('roll');
+    setTimeout(()=>{f.classList.remove('roll');const r=Math.floor(Math.random()*100)+1;f.textContent=r;
+      const mult=+(98/tgt).toFixed(2);
+      if(r<tgt){const w=Math.floor(bet*mult);updateBal(w);U.stats.wins++;
+        document.getElementById('diRes').innerHTML=`<div class="g-res w">🎯 ${r} (pod ${tgt}) — +${w.toLocaleString('cs-CZ')} CZK!</div>`}
+      else{U.stats.losses++;document.getElementById('diRes').innerHTML=`<div class="g-res l">${r} (nad ${tgt}) — Prohra</div>`}
+      saveUser()},700)};
+  window.diUpd(50);
+}
+
+/*═══════════════════════════════════════════
+  GAME: WHEEL
+═══════════════════════════════════════════*/
+function game_wheel(B){
+  const segs=[{l:'0.5×',m:.5},{l:'1.5×',m:1.5},{l:'2×',m:2},{l:'0×',m:0},{l:'3×',m:3},{l:'0.5×',m:.5},{l:'5×',m:5},{l:'1×',m:1}];
+  B.innerHTML=`<div class="g-ctrl"><div class="bet-grp"><label>Sázka</label><input type="number" class="bet-in" id="whBet" value="100" min="10"></div>
+    <button class="btn-p" id="whSpin" onclick="whSpin()">🎯 Zatočit</button></div>
+    <div style="text-align:center"><div style="font-size:.85rem;color:var(--t3);margin-bottom:8px">▼</div>
+    <div id="whW" style="width:240px;height:240px;border-radius:50%;border:4px solid var(--accent);margin:0 auto;
+      background:conic-gradient(var(--red) 0deg 45deg,var(--bg-3) 45deg 90deg,var(--blue) 90deg 135deg,var(--bg-3) 135deg 180deg,
+      var(--gold) 180deg 225deg,var(--bg-3) 225deg 270deg,var(--green) 270deg 315deg,var(--bg-3) 315deg 360deg);
+      box-shadow:0 0 40px var(--accent-glow);transition:transform 3.2s cubic-bezier(.17,.67,.12,.99);display:flex;align-items:center;justify-content:center">
+      <div style="width:60px;height:60px;border-radius:50%;background:var(--bg-0);border:3px solid var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9rem" id="whVal">?</div>
+    </div></div><div id="whRes" style="margin-top:18px"></div>`;
+  let rot=0;
+  window.whSpin=function(){const bet=+document.getElementById('whBet').value||100;if(bet>U.balance)return toast('Nedostatek!','l');
+    updateBal(-bet);document.getElementById('whSpin').disabled=true;
+    const idx=Math.floor(Math.random()*segs.length),ang=360/segs.length;
+    rot+=360*5+(360-idx*ang-ang/2);document.getElementById('whW').style.transform=`rotate(${rot}deg)`;
+    setTimeout(()=>{document.getElementById('whSpin').disabled=false;const s=segs[idx],w=Math.floor(bet*s.m);
+      document.getElementById('whVal').textContent=s.l;
+      if(w>0)updateBal(w);if(s.m>1)U.stats.wins++;else if(s.m<1)U.stats.losses++;saveUser();
+      document.getElementById('whRes').innerHTML=`<div class="g-res ${s.m>=1?'w':'l'}">🎯 ${s.l} — ${w>0?'+'+w.toLocaleString('cs-CZ')+' CZK':'Prohra'}</div>`
+    },3400)};
+}
+
+/*═══════════════════════════════════════════
+  GAME: COIN FLIP
+═══════════════════════════════════════════*/
+function game_coinflip(B){let ch=null;
+  B.innerHTML=`<div class="g-ctrl"><div class="bet-grp"><label>Sázka</label><input type="number" class="bet-in" id="cfBet" value="100" min="10"></div>
+    <button class="btn-p" onclick="cfFlip()">🪙 Hodit</button></div>
+    <div style="text-align:center"><div style="display:flex;gap:10px;justify-content:center;margin-bottom:16px">
+    <button class="btn-s" id="cfO" onclick="cfSel('o')">🦅 Orel</button>
+    <button class="btn-s" id="cfP" onclick="cfSel('p')">👑 Panna</button></div>
+    <div id="cfCoin" style="width:130px;height:130px;border-radius:50%;background:linear-gradient(135deg,#ffd700,#ffaa00);
+      margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:2.8rem;font-weight:900;color:#5a4000;
+      box-shadow:0 8px 30px rgba(255,215,0,.25);transition:transform .3s">?</div></div>
+    <div id="cfRes" style="margin-top:18px"></div>`;
+  window.cfSel=function(c){ch=c;document.getElementById('cfO').style.borderColor=c==='o'?'var(--accent)':'var(--border)';
+    document.getElementById('cfP').style.borderColor=c==='p'?'var(--accent)':'var(--border)'};
+  window.cfFlip=function(){if(!ch)return toast('Vyber orel/panna!','');const bet=+document.getElementById('cfBet').value||100;
+    if(bet>U.balance)return toast('Nedostatek!','l');updateBal(-bet);
+    const c=document.getElementById('cfCoin');c.style.animation='none';void c.offsetWidth;
+    c.style.animation='coinF .2s linear 8';c.textContent='?';
+    setTimeout(()=>{c.style.animation='none';const res=Math.random()<.5?'o':'p';c.textContent=res==='o'?'🦅':'👑';
+      if(res===ch){const w=bet*2;updateBal(w);U.stats.wins++;
+        document.getElementById('cfRes').innerHTML=`<div class="g-res w">🎉 ${res==='o'?'Orel':'Panna'}! +${w.toLocaleString('cs-CZ')} CZK</div>`}
+      else{U.stats.losses++;document.getElementById('cfRes').innerHTML=`<div class="g-res l">${res==='o'?'Orel':'Panna'}! Prohra</div>`}
+      saveUser()},1600)};
+}
+
+/*═══════════════════════════════════════════
+  GAME: HI-LO
+═══════════════════════════════════════════*/
+function game_hilo(B){
+  const suits=['♠','♥','♦','♣'],ranks=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  const vMap={A:1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,J:11,Q:12,K:13};
+  let cur,streak;function rC(){return{r:ranks[Math.floor(Math.random()*13)],s:suits[Math.floor(Math.random()*4)]}}
+  B.innerHTML=`<div class="g-ctrl"><div class="bet-grp"><label>Sázka</label><input type="number" class="bet-in" id="hlBet" value="100" min="10"></div>
+    <button class="btn-p" id="hlStart" onclick="hlStart()">Nová hra</button>
+    <button class="btn-s" id="hlCash" onclick="hlCash()" style="display:none">💰 Vybrat</button>
+    <span id="hlStr" style="font-family:var(--mono);color:var(--accent);font-weight:700"></span></div>
+    <div style="text-align:center"><div id="hlCard" style="width:110px;height:155px;background:#fff;border-radius:12px;
+      display:inline-flex;align-items:center;justify-content:center;font-size:2.2rem;font-weight:700;color:#1a1a1a;
+      box-shadow:0 8px 30px rgba(0,0,0,.3);margin:20px">?</div>
+    <div id="hlBtns" style="display:none"><button class="btn-p" onclick="hlGuess('hi')">⬆️ Vyšší</button>
+    <button class="btn-s" onclick="hlGuess('lo')" style="margin-left:8px">⬇️ Nižší</button></div></div>
+    <div id="hlRes" style="margin-top:18px"></div>`;
+  window.hlStart=function(){const bet=+document.getElementById('hlBet').value||100;if(bet>U.balance)return toast('Nedostatek!','l');
+    updateBal(-bet);window._hlB=bet;cur=rC();streak=0;const cd=document.getElementById('hlCard');
+    cd.style.color=(cur.s==='♥'||cur.s==='♦')?'var(--red)':'#1a1a1a';cd.textContent=cur.r+cur.s;
+    document.getElementById('hlBtns').style.display='block';document.getElementById('hlStart').style.display='none';
+    document.getElementById('hlCash').style.display='inline-flex';document.getElementById('hlRes').innerHTML='';
+    document.getElementById('hlStr').textContent='0 správných'};
+  window.hlGuess=function(d){const nc=rC(),ov=vMap[cur.r],nv=vMap[nc.r];
+    const ok=(d==='hi'&&nv>=ov)||(d==='lo'&&nv<=ov);cur=nc;const cd=document.getElementById('hlCard');
+    cd.style.color=(cur.s==='♥'||cur.s==='♦')?'var(--red)':'#1a1a1a';cd.textContent=cur.r+cur.s;
+    if(ok){streak++;document.getElementById('hlStr').textContent=streak+' správných ('+(1+streak*.5).toFixed(1)+'×)'}
+    else{document.getElementById('hlBtns').style.display='none';document.getElementById('hlStart').style.display='inline-flex';
+      document.getElementById('hlCash').style.display='none';U.stats.losses++;saveUser();
+      document.getElementById('hlRes').innerHTML=`<div class="g-res l">Špatně! Série: ${streak}</div>`}};
+  window.hlCash=function(){const m=1+streak*.5,w=Math.floor(window._hlB*m);updateBal(w);U.stats.wins++;saveUser();
+    document.getElementById('hlBtns').style.display='none';document.getElementById('hlStart').style.display='inline-flex';
+    document.getElementById('hlCash').style.display='none';
+    document.getElementById('hlRes').innerHTML=`<div class="g-res w">💰 Série ${streak}! +${w.toLocaleString('cs-CZ')} CZK (${m.toFixed(1)}×)</div>`};
+}
+
+/*═══════════════════════════════════════════
+  GAME: KENO
+═══════════════════════════════════════════*/
+function game_keno(B){let sel=new Set(),active=false;
+  B.innerHTML=`<div class="g-ctrl"><div class="bet-grp"><label>Sázka</label><input type="number" class="bet-in" id="keBet" value="50" min="10"></div>
+    <button class="btn-p" id="keDraw" onclick="keDraw()">🔢 Losovat</button>
+    <span id="keInfo" style="color:var(--t2);font-size:.83rem">Vyber 1–10 čísel</span></div>
+    <div class="mines-g" id="keG" style="grid-template-columns:repeat(8,1fr);max-width:420px"></div><div id="keRes"></div>`;
+  const g=document.getElementById('keG');
+  for(let i=1;i<=40;i++){const el=document.createElement('div');el.className='mine-c';el.style.fontSize='.85rem';
+    el.style.fontFamily='var(--mono)';el.textContent=i;el.onclick=()=>{if(active)return;
+      if(sel.has(i)){sel.delete(i);el.style.borderColor='var(--border)';el.style.color='var(--t1)';el.style.background='var(--bg-3)'}
+      else if(sel.size<10){sel.add(i);el.style.borderColor='var(--accent)';el.style.color='var(--accent)';el.style.background='var(--accent-glow)'}
+      document.getElementById('keInfo').textContent='Vybráno: '+sel.size+'/10'};g.appendChild(el)}
+  window.keDraw=function(){if(sel.size===0)return toast('Vyber čísla!','');const bet=+document.getElementById('keBet').value||50;
+    if(bet>U.balance)return toast('Nedostatek!','l');updateBal(-bet);active=true;document.getElementById('keDraw').disabled=true;
+    let drawn=new Set();while(drawn.size<10)drawn.add(Math.floor(Math.random()*40)+1);
+    const nums=[...drawn];let idx=0;
+    const iv=setInterval(()=>{if(idx>=nums.length){clearInterval(iv);
+      const hits=[...sel].filter(n=>drawn.has(n)).length;const mults=[0,.5,1,2,4,8,15,30,60,100,200];const m=mults[hits]||0;
+      const w=Math.floor(bet*m);if(w>0){updateBal(w);U.stats.wins++}else U.stats.losses++;saveUser();
+      document.getElementById('keRes').innerHTML=`<div class="g-res ${w>0?'w':'l'}">${hits} trefených — ${w>0?'+'+w.toLocaleString('cs-CZ')+' CZK ('+m+'×)':'Prohra'}</div>`;
+      active=false;document.getElementById('keDraw').disabled=false;
+      setTimeout(()=>{sel.clear();document.querySelectorAll('#keG .mine-c').forEach(e=>{e.style.borderColor='var(--border)';e.style.color='var(--t1)';e.style.background='var(--bg-3)'});
+        document.getElementById('keInfo').textContent='Vyber 1–10 čísel'},3000);return}
+      const n=nums[idx];const cells=document.querySelectorAll('#keG .mine-c');const el=cells[n-1];
+      el.style.borderColor='var(--blue)';el.style.background='rgba(61,139,255,.12)';el.style.color='var(--blue)';
+      if(sel.has(n)){el.style.borderColor='var(--green)';el.style.background='rgba(0,232,123,.15)';el.style.color='var(--green)'}
+      idx++},180)};
+}
+
+/*═══════════════════════════════════════════
+  GAME: PLINKO
+═══════════════════════════════════════════*/
+function game_plinko(B){
+  const slots=[10,3,1.5,1,.5,.3,.5,1,1.5,3,10];
+  const cols=['var(--red)','var(--gold)','var(--blue)','var(--t3)','var(--t3)','var(--t3)','var(--t3)','var(--t3)','var(--blue)','var(--gold)','var(--red)'];
+  B.innerHTML=`<div class="g-ctrl"><div class="bet-grp"><label>Sázka</label><input type="number" class="bet-in" id="plBet" value="50" min="10"></div>
+    <button class="btn-p" onclick="plDrop()">⚪ Pustit</button></div>
+    <div style="background:var(--bg-3);border:1px solid var(--border);border-radius:var(--radius);padding:20px;max-width:420px;margin:0 auto;text-align:center">
+    <div style="font-size:3rem;margin-bottom:10px" id="plBall">⚪</div>
+    <div style="display:flex;gap:4px;justify-content:center" id="plSlots">
+    ${slots.map((s,i)=>`<div style="flex:1;padding:8px 4px;border-radius:6px;font-family:var(--mono);font-size:.7rem;font-weight:700;background:${cols[i]}18;color:${cols[i]};border:1px solid ${cols[i]}30">${s}×</div>`).join('')}</div></div>
+    <div id="plRes" style="margin-top:18px"></div>`;
+  window.plDrop=function(){const bet=+document.getElementById('plBet').value||50;if(bet>U.balance)return toast('Nedostatek!','l');
+    updateBal(-bet);let pos=5;for(let i=0;i<10;i++)pos+=(Math.random()<.5?-1:1);pos=Math.max(0,Math.min(slots.length-1,Math.round(pos)));
+    const slotEls=document.querySelectorAll('#plSlots > div');let ct=0;
+    const ball=document.getElementById('plBall');ball.style.transition='transform .08s';
+    const iv=setInterval(()=>{slotEls.forEach(s=>s.style.transform='');
+      if(ct<18){const idx=Math.floor(Math.random()*slots.length);slotEls[idx].style.transform='scale(1.2)';
+        ball.style.transform=`translateX(${(idx-5)*20}px)`;ct++}
+      else{clearInterval(iv);ball.style.transform=`translateX(${(pos-5)*20}px)`;
+        slotEls[pos].style.transform='scale(1.3)';slotEls[pos].style.boxShadow=`0 0 20px ${cols[pos]}`;
+        const m=slots[pos],w=Math.floor(bet*m);if(w>0)updateBal(w);if(m>=1)U.stats.wins++;else U.stats.losses++;saveUser();
+        document.getElementById('plRes').innerHTML=`<div class="g-res ${m>=1?'w':'l'}">⚪ ${m}× — ${w>0?'+'+w.toLocaleString('cs-CZ')+' CZK':'Prohra'}</div>`;
+        setTimeout(()=>{slotEls[pos].style.transform='';slotEls[pos].style.boxShadow='';ball.style.transform=''},2000)}
+    },90)};
+}
+
+/*═══════════════════════════════════════════
+  GAME: SCRATCH
+═══════════════════════════════════════════*/
+function game_scratch(B){
+  const P=['🍒','🍋','⭐','💎','7️⃣','🔔','🍀','💰'];let cells,revCnt,bet;
+  B.innerHTML=`<div class="g-ctrl"><div class="bet-grp"><label>Sázka</label><input type="number" class="bet-in" id="scBet" value="100" min="10"></div>
+    <button class="btn-p" onclick="scNew()">🎟️ Nový los</button></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:300px;margin:20px auto" id="scG"></div>
+    <div id="scRes"></div>`;
+  window.scNew=function(){bet=+document.getElementById('scBet').value||100;if(bet>U.balance)return toast('Nedostatek!','l');
+    updateBal(-bet);revCnt=0;document.getElementById('scRes').innerHTML='';
+    cells=[];const jc=Math.random();
+    if(jc<.1){const s=P[Math.floor(Math.random()*P.length)];cells=Array(9).fill(s)}
+    else if(jc<.35){const s=P[Math.floor(Math.random()*P.length)];for(let i=0;i<9;i++)cells.push(i<3?s:P[Math.floor(Math.random()*P.length)]);cells.sort(()=>Math.random()-.5)}
+    else{for(let i=0;i<9;i++)cells.push(P[Math.floor(Math.random()*P.length)])}
+    const g=document.getElementById('scG');g.innerHTML='';
+    cells.forEach((s,i)=>{const el=document.createElement('div');
+      el.style.cssText='width:90px;height:90px;background:var(--bg-4);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:2rem;cursor:pointer;transition:all .3s var(--ease);color:var(--t3);font-weight:700;justify-self:center';
+      el.textContent='?';el.onclick=()=>{if(el.dataset.rev)return;el.dataset.rev=1;el.textContent=cells[i];
+        el.style.background='var(--bg-2)';el.style.borderColor='var(--accent)';el.style.color='var(--t1)';
+        el.style.transform='scale(1.05)';setTimeout(()=>el.style.transform='',200);
+        revCnt++;if(revCnt===9){const cnt={};cells.forEach(s=>cnt[s]=(cnt[s]||0)+1);const mx=Math.max(...Object.values(cnt));
+          let w=0;if(mx>=6)w=bet*25;else if(mx>=5)w=bet*10;else if(mx>=4)w=bet*5;else if(mx>=3)w=bet*2;
+          if(w>0){updateBal(w);U.stats.wins++}else U.stats.losses++;saveUser();
+          document.getElementById('scRes').innerHTML=`<div class="g-res ${w>0?'w':'l'}">${w>0?'🎉 '+mx+'× stejný! +'+w.toLocaleString('cs-CZ')+' CZK':'Žádná výhra'}</div>`}};
+      g.appendChild(el)})};
+}
+
+/* COINFLIP CSS ANIMATION */
+const styleExtra=document.createElement('style');
+styleExtra.textContent=`@keyframes coinF{0%{transform:rotateY(0)}100%{transform:rotateY(360deg)}}`;
+document.head.appendChild(styleExtra);
+
+/*═══════════════════════════════════════════
+  STOCKS / TRADING
+═══════════════════════════════════════════*/
+const STOCKS=[
+  {sym:'AAPL',name:'Apple Inc.',base:4250},{sym:'MSFT',name:'Microsoft',base:9800},
+  {sym:'GOOGL',name:'Alphabet',base:3560},{sym:'TSLA',name:'Tesla',base:5100},
+  {sym:'NVDA',name:'NVIDIA',base:22400},{sym:'META',name:'Meta Platforms',base:12800},
+  {sym:'AMZN',name:'Amazon',base:4600},{sym:'NFLX',name:'Netflix',base:15200},
+  {sym:'BTC',name:'Bitcoin (CZK)',base:2450000},{sym:'ETH',name:'Ethereum (CZK)',base:82000},
+  {sym:'SPY',name:'S&P 500 ETF',base:13500},{sym:'CEZ',name:'ČEZ Group',base:1420},
+];
+
+let stockPrices={};let stockHistory={};
+STOCKS.forEach(s=>{stockPrices[s.sym]=s.base;stockHistory[s.sym]=[s.base]});
+
+function updateStocks(){
+  STOCKS.forEach(s=>{
+    const change=(Math.random()-.48)*s.base*0.015;
+    stockPrices[s.sym]=Math.max(1,stockPrices[s.sym]+change);
+    stockHistory[s.sym].push(stockPrices[s.sym]);
+    if(stockHistory[s.sym].length>50)stockHistory[s.sym].shift();
+  });
+  renderStocks();
+}
+
+function renderStocks(){
+  const g=document.getElementById('stockGrid');
+  g.innerHTML=STOCKS.map(s=>{
+    const price=stockPrices[s.sym];const hist=stockHistory[s.sym];
+    const prev=hist.length>1?hist[hist.length-2]:price;
+    const chg=price-prev;const pct=(chg/prev*100);
+    const up=chg>=0;
+    return `<div class="stock-card">
+      <div class="stock-head"><span class="stock-name">${s.name}</span><span class="stock-sym">${s.sym}</span></div>
+      <div class="stock-price" style="color:${up?'var(--green)':'var(--red)'}">${price>=10000?Math.round(price).toLocaleString('cs-CZ'):price.toFixed(2).replace('.',',')} CZK</div>
+      <div class="stock-change ${up?'up':'down'}">${up?'▲':'▼'} ${Math.abs(chg).toFixed(2).replace('.',',')} (${up?'+':''}${pct.toFixed(2)}%)</div>
+      <canvas id="ch_${s.sym}" width="300" height="60" style="width:100%;height:60px;margin:10px 0"></canvas>
+      <div class="stock-actions">
+        <input type="number" class="stock-input" id="qty_${s.sym}" value="1" min="1" placeholder="Ks">
+        <button class="stock-btn stock-buy" onclick="stockBuy('${s.sym}')">Koupit</button>
+        <button class="stock-btn stock-sell" onclick="stockSell('${s.sym}')">Prodat</button>
+      </div></div>`;
+  }).join('');
+  STOCKS.forEach(s=>drawMiniChart(s.sym));
+  renderPortfolio();
+}
+
+function drawMiniChart(sym){
+  const canvas=document.getElementById('ch_'+sym);if(!canvas)return;
+  const ctx=canvas.getContext('2d');const hist=stockHistory[sym];const w=canvas.width,h=canvas.height;
+  ctx.clearRect(0,0,w,h);if(hist.length<2)return;
+  const min=Math.min(...hist),max=Math.max(...hist),range=max-min||1;
+  const up=hist[hist.length-1]>=hist[0];
+  ctx.strokeStyle=up?'#00e87b':'#ff3355';ctx.lineWidth=2;ctx.beginPath();
+  hist.forEach((v,i)=>{const x=i/(hist.length-1)*w;const y=h-(v-min)/range*h;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)});
+  ctx.stroke();
+  // fill
+  ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();
+  ctx.fillStyle=up?'rgba(0,232,123,.06)':'rgba(255,51,85,.06)';ctx.fill();
+}
+
+function stockBuy(sym){
+  const qty=+document.getElementById('qty_'+sym).value||1;
+  const cost=Math.round(stockPrices[sym]*qty);
+  if(cost>U.balance)return toast('Nedostatek CZK!','l');
+  updateBal(-cost);
+  if(!U.portfolio[sym])U.portfolio[sym]={qty:0,avgPrice:0};
+  const old=U.portfolio[sym];
+  old.avgPrice=((old.avgPrice*old.qty)+(stockPrices[sym]*qty))/(old.qty+qty);
+  old.qty+=qty;
+  saveUser();renderPortfolio();
+  toast(`Koupeno ${qty}× ${sym} za ${cost.toLocaleString('cs-CZ')} CZK`,'w');
+}
+
+function stockSell(sym){
+  if(!U.portfolio[sym]||U.portfolio[sym].qty===0)return toast('Nemáš tuto akcii!','l');
+  const qty=Math.min(+document.getElementById('qty_'+sym).value||1,U.portfolio[sym].qty);
+  const revenue=Math.round(stockPrices[sym]*qty);
+  updateBal(revenue);
+  U.portfolio[sym].qty-=qty;
+  if(U.portfolio[sym].qty<=0)delete U.portfolio[sym];
+  saveUser();renderPortfolio();
+  toast(`Prodáno ${qty}× ${sym} za ${revenue.toLocaleString('cs-CZ')} CZK`,'w');
+}
+
+function renderPortfolio(){
+  const el=document.getElementById('portfolioList');
+  const keys=Object.keys(U.portfolio||{}).filter(k=>U.portfolio[k].qty>0);
+  if(keys.length===0){el.innerHTML='<p style="color:var(--t3);font-size:.88rem">Zatím nemáš žádné akcie.</p>';return}
+  let totalVal=0;
+  el.innerHTML=keys.map(sym=>{
+    const p=U.portfolio[sym];const curPrice=stockPrices[sym];const val=curPrice*p.qty;
+    const profit=val-(p.avgPrice*p.qty);const up=profit>=0;totalVal+=val;
+    return `<div class="pf-row">
+      <div><span style="font-weight:700">${sym}</span> <span style="color:var(--t3);font-size:.82rem">×${p.qty}</span></div>
+      <div style="text-align:right"><div style="font-family:var(--mono);font-weight:600">${Math.round(val).toLocaleString('cs-CZ')} CZK</div>
+      <div style="font-size:.8rem;color:${up?'var(--green)':'var(--red)'}">${up?'+':''}${Math.round(profit).toLocaleString('cs-CZ')} CZK</div></div></div>`;
+  }).join('');
+  el.innerHTML+=`<div class="pf-row" style="border-top:1px solid var(--border);margin-top:8px;padding-top:12px">
+    <span style="font-weight:700">Celková hodnota</span>
+    <span style="font-family:var(--mono);font-weight:700;color:var(--accent)">${Math.round(totalVal).toLocaleString('cs-CZ')} CZK</span></div>`;
+}
+
+setInterval(updateStocks,3000);
+setTimeout(renderStocks,100);
+
+/*═══════════════════════════════════════════
+  EARN / QUIZ SYSTEM
+═══════════════════════════════════════════*/
+const QUESTIONS=[
+  {q:'Kolik je 15 × 7?',o:['95','105','110','115'],c:1,d:'easy',r:200},
+  {q:'Hlavní město Japonska?',o:['Peking','Soul','Tokio','Šanghaj'],c:2,d:'easy',r:200},
+  {q:'Kolik planet je ve sluneční soustavě?',o:['7','8','9','10'],c:1,d:'easy',r:200},
+  {q:'Kdo napsal Romea a Julii?',o:['Goethe','Shakespeare','Čechov','Molière'],c:1,d:'easy',r:250},
+  {q:'Jaký je chemický symbol zlata?',o:['Ag','Fe','Au','Cu'],c:2,d:'med',r:500},
+  {q:'Kolik kostí má dospělý člověk?',o:['186','206','226','246'],c:1,d:'med',r:500},
+  {q:'V jakém roce padla Berlínská zeď?',o:['1987','1989','1991','1993'],c:1,d:'med',r:500},
+  {q:'Který prvek má atomové číslo 1?',o:['Helium','Lithium','Vodík','Uhlík'],c:2,d:'med',r:500},
+  {q:'Jaká je rychlost světla (km/s)?',o:['150 000','300 000','450 000','600 000'],c:1,d:'hard',r:1000},
+  {q:'Kdo namaloval Guernici?',o:['Dalí','Monet','Picasso','Van Gogh'],c:2,d:'hard',r:1000},
+  {q:'Kolik je log₂(1024)?',o:['8','9','10','12'],c:2,d:'hard',r:1000},
+  {q:'Který element má symbol "W"?',o:['Vanad','Wolfram','Xenon','Zinek'],c:1,d:'hard',r:1200},
+  {q:'Hlavní město Bhútánu?',o:['Kathmandu','Thimphu','Dháka','Colombo'],c:1,d:'hard',r:1200},
+  {q:'Kolik je √(144) × 3?',o:['30','36','42','48'],c:1,d:'med',r:450},
+  {q:'Nejdelší řeka světa?',o:['Amazonka','Nil','Jang-c-Ťiang','Mississippi'],c:1,d:'easy',r:200},
+  {q:'Kolik strun má standardní kytara?',o:['4','5','6','8'],c:2,d:'easy',r:200},
+  {q:'Který plyn tvoří většinu atmosféry?',o:['Kyslík','Dusík','CO2','Argon'],c:1,d:'med',r:500},
+  {q:'Kdo formuloval teorii relativity?',o:['Newton','Einstein','Hawking','Bohr'],c:1,d:'med',r:400},
+  {q:'Kolik bitů je v jednom bajtu?',o:['4','6','8','16'],c:2,d:'easy',r:250},
+  {q:'Jaký je nejtvrdší nerost?',o:['Safír','Rubín','Diamant','Korund'],c:2,d:'med',r:450},
+];
+
+let activeQuestions=[];
+
+function generateQuestions(){
+  const shuffled=[...QUESTIONS].sort(()=>Math.random()-.5);
+  activeQuestions=shuffled.slice(0,6);
+  renderEarn();
+}
+
+function renderEarn(){
+  const el=document.getElementById('earnList');
+  el.innerHTML=activeQuestions.map((q,qi)=>{
+    const dc=q.d==='easy'?'diff-easy':q.d==='med'?'diff-med':'diff-hard';
+    const dl=q.d==='easy'?'Lehká':q.d==='med'?'Střední':'Těžká';
+    return `<div class="earn-card" id="eq${qi}">
+      <div class="earn-head"><span class="earn-title">${q.q}</span>
+      <div><span class="earn-diff ${dc}">${dl}</span> <span class="earn-reward">+${q.r.toLocaleString('cs-CZ')} CZK</span></div></div>
+      <div class="earn-quiz">${q.o.map((o,oi)=>
+        `<button class="earn-opt" onclick="answerQ(${qi},${oi})">${o}</button>`).join('')}</div></div>`;
+  }).join('');
+}
+
+window.answerQ=function(qi,oi){
+  const q=activeQuestions[qi];const btns=document.querySelectorAll(`#eq${qi} .earn-opt`);
+  btns.forEach((b,i)=>{b.disabled=true;if(i===q.c)b.classList.add('correct');if(i===oi&&i!==q.c)b.classList.add('wrong')});
+  if(oi===q.c){updateBal(q.r);toast(`+${q.r.toLocaleString('cs-CZ')} CZK za správnou odpověď!`,'w')}
+  else toast('Špatná odpověď!','l');
+};
+
+generateQuestions();
+
+/*═══════════════════════════════════════════
+  CHATBOT
+═══════════════════════════════════════════*/
+function toggleChat(){
+  document.getElementById('chatPanel').classList.toggle('open');
+}
+
+function sendChat(){
+  const inp=document.getElementById('chatInput');const msg=inp.value.trim();if(!msg)return;
+  addMsg(msg,'user');inp.value='';
+  setTimeout(()=>addMsg(botReply(msg),'bot'),600+Math.random()*400);
+}
+
+function addMsg(text,who){
+  const el=document.createElement('div');el.className='chat-msg '+who;el.textContent=text;
+  document.getElementById('chatMsgs').appendChild(el);
+  document.getElementById('chatMsgs').scrollTop=99999;
+}
+
+function botReply(msg){
+  const m=msg.toLowerCase();
+  if(m.includes('ahoj')||m.includes('čau')||m.includes('hey')||m.includes('hi'))return'Ahoj! 👋 Jak ti můžu pomoct? Ptej se na hry, akcie, nebo cokoli dalšího.';
+  if(m.includes('balance')||m.includes('zůstatek')||m.includes('kolik'))return`Tvůj aktuální zůstatek je ${U.balance.toLocaleString('cs-CZ')} CZK.`;
+  if(m.includes('slot')||m.includes('automat'))return'🎰 Automaty — Zatočíš 5 válci. 3 stejné = 3× sázka, 4 stejné = 10×, 5 stejných = 50×! Hodně štěstí!';
+  if(m.includes('rulet'))return'🎡 Ruleta — Čísla 0–36. Sázej na barvu (2×), rozsah (2×), tucet (3×) nebo zelenou (35×).';
+  if(m.includes('blackjack')||m.includes('bj'))return'🃏 Blackjack — Cíl: dostat se blíž k 21 než dealer, ale nepřetáhnout! Eso = 1 nebo 11.';
+  if(m.includes('crash'))return'📈 Crash — Multiplikátor roste. Vyber včas! Crashpoint je náhodný.';
+  if(m.includes('min'))return'💣 Miny — 25 polí, 5 min. Každé bezpečné pole = +0.25× k multiplier. Vyber kdykoliv!';
+  if(m.includes('akci')||m.includes('stock')||m.includes('trad'))return'📊 V sekci Akcie můžeš investovat do 12 titulů. Ceny se aktualizují každé 3 vteřiny. Kup levně, prodej draho!';
+  if(m.includes('vydělat')||m.includes('earn')||m.includes('kredit')||m.includes('peníze'))return'💰 Jdi do sekce "Vydělat" a odpovídej na kvízové otázky. Lehké = 200 CZK, střední = 500, těžké = 1000+!';
+  if(m.includes('tip')||m.includes('strateg'))return'💡 Tip: U Crash hry vyber brzy (kolem 1.5×) pro bezpečný zisk. U Min odkryjte 3–4 pole a vyberte. Akcie kupte při poklesu!';
+  if(m.includes('kdo jsi')||m.includes('bot'))return'Jsem UvalyBot — tvůj AI asistent na UvalyBet.cz! Znám všechny hry a rád poradím. 🤖';
+  if(m.includes('stats')||m.includes('statistik'))return`📊 Tvé statistiky: ${U.stats.wins} výher, ${U.stats.losses} proher. Win rate: ${U.stats.wins+U.stats.losses>0?Math.round(U.stats.wins/(U.stats.wins+U.stats.losses)*100):0}%`;
+  if(m.includes('help')||m.includes('pomoc')||m.includes('nápověd'))return'Můžu ti říct o: hrách (slots, ruleta, blackjack, crash, miny...), akciích, vydělávání CZK, strategiích, nebo tvých statistikách. Ptej se!';
+  if(m.includes('díky')||m.includes('děkuj')||m.includes('thanks'))return'Rádo se stalo! 😊 Pokud budeš potřebovat cokoli dalšího, jsem tu.';
+  if(m.includes('kolo')||m.includes('wheel'))return'🎯 Kolo štěstí — 8 segmentů s multiplikátory 0×–5×. Nejvyšší výhra je 5× sázka!';
+  if(m.includes('coin')||m.includes('flip')||m.includes('mince'))return'🪙 Coin Flip — Klasická 50/50. Zvol orel nebo panna a sázka se zdvojnásobí při výhře!';
+  if(m.includes('hilo')||m.includes('hi-lo'))return'⬆️ Hi-Lo — Uhádni, jestli další karta bude vyšší nebo nižší. Série = vyšší multiplikátor!';
+  if(m.includes('keno'))return'🔢 Keno — Vyber 1–10 čísel ze 40. Losuje se 10. Čím víc trefíš, tím vyšší násobek!';
+  if(m.includes('plinko'))return'⚪ Plinko — Míček padá přes kolíky do slotů. Krajní sloty = 10× sázka!';
+  if(m.includes('scratch')||m.includes('stír')||m.includes('los'))return'🎟️ Stírací los — Odhal 9 polí. 3+ stejné symboly = výhra!';
+  return'Hmm, tomu úplně nerozumím. 🤔 Zkus se zeptat na konkrétní hru, akcie, nebo napiš "help" pro seznam témat.';
+}
+
+/*═══════════════════════════════════════════
+  INIT
+═══════════════════════════════════════════*/
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#userMenu')&&!e.target.closest('#btnUser'))
+    document.getElementById('userMenu').classList.remove('open');
+});
+</script>
+</body>
+</html>
