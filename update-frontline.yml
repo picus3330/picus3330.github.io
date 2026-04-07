@@ -1,0 +1,55 @@
+name: Update Frontline Data
+
+on:
+  schedule:
+    # Every day at 04:30 UTC (after cyterat updates at 03:00 UTC)
+    - cron: '30 4 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Fetch latest frontline GeoJSON
+        run: |
+          set -e
+          TODAY=$(date -u +%Y-%m-%d)
+          YESTERDAY=$(date -u -d "yesterday" +%Y-%m-%d)
+
+          BASE="https://raw.githubusercontent.com/cyterat/deepstate-map-data/main/data"
+
+          # Try today's file first, then yesterday's
+          for DATE in "$TODAY" "$YESTERDAY"; do
+            URL="${BASE}/deepstatemap_data_${DATE}.geojson"
+            echo "Trying: $URL"
+            HTTP_CODE=$(curl -s -o /tmp/frontline_new.geojson -w "%{http_code}" "$URL")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "Success: fetched data for $DATE"
+              echo "{\"fetched_date\": \"$DATE\", \"source\": \"cyterat/deepstate-map-data\", \"updated_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > data/meta.json
+              cp /tmp/frontline_new.geojson data/frontline.geojson
+              break
+            else
+              echo "Not found for $DATE (HTTP $HTTP_CODE)"
+            fi
+          done
+
+          if [ ! -f data/frontline.geojson ]; then
+            echo "ERROR: Could not fetch any GeoJSON"
+            exit 1
+          fi
+
+          echo "File size: $(wc -c < data/frontline.geojson) bytes"
+
+      - name: Commit updated data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/frontline.geojson data/meta.json
+          git diff --staged --quiet || git commit -m "chore: update frontline data $(date -u +%Y-%m-%d)"
+          git push
