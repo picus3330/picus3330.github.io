@@ -19,31 +19,24 @@ jobs:
       - name: Fetch latest frontline GeoJSON
         run: |
           set -e
-          TODAY=$(date -u +%Y-%m-%d)
-          YESTERDAY=$(date -u -d "yesterday" +%Y-%m-%d)
-
           BASE="https://raw.githubusercontent.com/cyterat/deepstate-map-data/main/data"
 
-          # Try today's file first, then yesterday's
-          for DATE in "$TODAY" "$YESTERDAY"; do
+          # Format: YYYYMMDD — no dashes! (e.g. deepstatemap_data_20260407.geojson)
+          for OFFSET in 0 1 2 3; do
+            DATE=$(date -u -d "${OFFSET} days ago" +%Y%m%d)
             URL="${BASE}/deepstatemap_data_${DATE}.geojson"
             echo "Trying: $URL"
-            HTTP_CODE=$(curl -s -o /tmp/frontline_new.geojson -w "%{http_code}" "$URL")
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "Success: fetched data for $DATE"
-              echo "{\"fetched_date\": \"$DATE\", \"source\": \"cyterat/deepstate-map-data\", \"updated_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > data/meta.json
+            HTTP=$(curl -s -o /tmp/frontline_new.geojson -w "%{http_code}" "$URL")
+            if [ "$HTTP" = "200" ]; then
+              echo "✓ Fetched data for $DATE"
               cp /tmp/frontline_new.geojson data/frontline.geojson
+              echo "{\"fetched_date\":\"${DATE}\",\"source\":\"cyterat/deepstate-map-data\",\"updated_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > data/meta.json
               break
-            else
-              echo "Not found for $DATE (HTTP $HTTP_CODE)"
             fi
+            echo "  Not found (HTTP $HTTP)"
           done
 
-          if [ ! -f data/frontline.geojson ]; then
-            echo "ERROR: Could not fetch any GeoJSON"
-            exit 1
-          fi
-
+          [ -f data/frontline.geojson ] && [ "$(wc -c < data/frontline.geojson)" -gt 100 ] || { echo "ERROR: No data fetched"; exit 1; }
           echo "File size: $(wc -c < data/frontline.geojson) bytes"
 
       - name: Commit updated data
