@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ukraine War Map — Live Frontline</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg-void:       #04070d;
+    --bg-panel:      #080d17;
+    --bg-glass:      rgba(8,13,23,0.88);
+    --border:        rgba(46,200,130,0.18);
+    --border-bright: rgba(46,200,130,0.45);
+    --green:         #2ec882;
+    --green-dim:     #1a7a50;
+    --red:           #e84040;
+    --amber:         #f0a030;
+    --text-main:     #c8dde8;
+    --text-dim:      #5a7890;
+    --text-bright:   #e8f4ff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:var(--bg-void); font-family:'Rajdhani',sans-serif; }
+
+  /* ── HEADER ── */
+  #header {
+    position:fixed; top:0; left:0; right:0; z-index:1000;
+    height:56px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 20px;
+    background:linear-gradient(180deg,rgba(4,7,13,0.98) 0%,rgba(4,7,13,0.8) 100%);
+    border-bottom:1px solid var(--border);
+    backdrop-filter:blur(12px);
+  }
+  .header-left { display:flex; align-items:center; gap:14px; }
+  .flag-badge {
+    width:34px; height:22px;
+    background:linear-gradient(180deg,#005bbb 50%,#ffd500 50%);
+    border-radius:2px;
+    box-shadow:0 0 12px rgba(0,91,187,0.5),0 0 24px rgba(255,213,0,0.3);
+    flex-shrink:0;
+    animation:flagGlow 3s ease-in-out infinite;
+  }
+  @keyframes flagGlow {
+    0%,100% { box-shadow:0 0 12px rgba(0,91,187,0.5),0 0 24px rgba(255,213,0,0.3); }
+    50%     { box-shadow:0 0 20px rgba(0,91,187,0.8),0 0 40px rgba(255,213,0,0.5); }
+  }
+  .header-title {
+    font-family:'Barlow Condensed',sans-serif;
+    font-size:22px; font-weight:700; letter-spacing:0.12em;
+    color:var(--text-bright); text-transform:uppercase;
+  }
+  .header-title span { color:var(--green); }
+  .header-subtitle {
+    font-family:'Share Tech Mono',monospace;
+    font-size:10px; color:var(--text-dim); letter-spacing:0.08em; text-transform:uppercase; margin-top:1px;
+  }
+  .header-right { display:flex; align-items:center; gap:16px; }
+  .status-pill {
+    display:flex; align-items:center; gap:6px;
+    padding:4px 10px;
+    border:1px solid var(--border-bright); border-radius:3px;
+    background:rgba(46,200,130,0.07);
+    font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--green);
+    letter-spacing:0.06em; text-transform:uppercase;
+  }
+  .pulse-dot {
+    width:7px; height:7px; border-radius:50%; background:var(--green);
+    animation:pulse 1.6s ease-in-out infinite; flex-shrink:0;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; box-shadow:0 0 0 0 rgba(46,200,130,0.6); }
+    50%     { opacity:0.6; box-shadow:0 0 0 5px rgba(46,200,130,0); }
+  }
+  .pulse-dot.loading { background:var(--amber); animation-duration:0.4s; }
+  .pulse-dot.error   { background:var(--red); animation:none; }
+  #update-time { font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--text-dim); letter-spacing:0.05em; }
+  #refresh-btn {
+    cursor:pointer;
+    background:rgba(46,200,130,0.07); border:1px solid var(--border-bright); border-radius:3px;
+    padding:5px 12px;
+    font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--green);
+    letter-spacing:0.08em; text-transform:uppercase;
+    transition:background 0.2s,box-shadow 0.2s;
+  }
+  #refresh-btn:hover { background:rgba(46,200,130,0.16); box-shadow:0 0 12px rgba(46,200,130,0.3); }
+  #refresh-btn:active { transform:scale(0.97); }
+  #countdown { font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--text-dim); }
+
+  /* ── MAP ── */
+  #map { position:fixed; top:56px; left:0; right:0; bottom:0; }
+  .leaflet-tile { filter:brightness(0.88) saturate(0.65); }
+
+  /* ── PANELS ── */
+  .panel {
+    position:fixed; z-index:900;
+    background:var(--bg-glass); border:1px solid var(--border); border-radius:6px;
+    padding:14px 16px;
+    backdrop-filter:blur(16px);
+    box-shadow:0 4px 40px rgba(0,0,0,0.6);
+  }
+  .panel-title {
+    font-family:'Barlow Condensed',sans-serif;
+    font-size:11px; font-weight:700; letter-spacing:0.2em; color:var(--text-dim);
+    text-transform:uppercase;
+    border-bottom:1px solid var(--border); padding-bottom:8px; margin-bottom:10px;
+  }
+
+  /* Legend */
+  #legend { bottom:24px; left:20px; min-width:210px; }
+  .legend-item { display:flex; align-items:center; gap:9px; margin-bottom:7px; font-size:13px; color:var(--text-main); font-weight:500; letter-spacing:0.03em; }
+  .legend-swatch { width:24px; height:14px; border-radius:2px; flex-shrink:0; border:1px solid rgba(255,255,255,0.12); }
+  .sw-occupied { background:rgba(180,30,30,0.55); }
+  .sw-ua       { background:rgba(20,80,160,0.35); }
+  .legend-line { width:24px; height:3px; flex-shrink:0; border-radius:2px; }
+  .ln-front    { background:var(--amber); box-shadow:0 0 6px var(--amber); }
+  .ln-border   { background:transparent; border:1px dashed rgba(120,150,180,0.55); height:1px; margin:1px 0; }
+
+  /* Stats */
+  #stats { bottom:24px; right:20px; min-width:200px; }
+  .stat-row { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:7px; }
+  .stat-label { font-size:12px; color:var(--text-dim); letter-spacing:0.04em; }
+  .stat-value { font-family:'Share Tech Mono',monospace; font-size:13px; color:var(--text-main); }
+  .sv-red   { color:var(--red); }
+  .sv-green { color:var(--green); }
+  .sv-amber { color:var(--amber); }
+
+  /* ── LOADING OVERLAY ── */
+  #overlay {
+    position:fixed; inset:0; z-index:2000;
+    background:var(--bg-void);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
+    transition:opacity 0.5s ease;
+  }
+  #overlay.hidden { opacity:0; pointer-events:none; }
+  .loader-flag {
+    width:60px; height:38px;
+    background:linear-gradient(180deg,#005bbb 50%,#ffd500 50%);
+    border-radius:3px;
+    box-shadow:0 0 30px rgba(0,91,187,0.5),0 0 60px rgba(255,213,0,0.3);
+    animation:flagPulse 2s ease-in-out infinite;
+  }
+  @keyframes flagPulse {
+    0%,100% { box-shadow:0 0 30px rgba(0,91,187,0.5),0 0 60px rgba(255,213,0,0.3); }
+    50%     { box-shadow:0 0 50px rgba(0,91,187,0.8),0 0 80px rgba(255,213,0,0.5); }
+  }
+  .loader-title { font-family:'Barlow Condensed',sans-serif; font-size:22px; font-weight:700; letter-spacing:0.2em; color:var(--text-bright); text-transform:uppercase; }
+  .loader-bar-track { width:240px; height:2px; background:rgba(46,200,130,0.15); border-radius:2px; overflow:hidden; }
+  .loader-bar-fill { height:100%; width:0%; background:linear-gradient(90deg,var(--green-dim),var(--green)); border-radius:2px; transition:width 0.3s ease; box-shadow:0 0 8px var(--green); }
+  .loader-status { font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--text-dim); letter-spacing:0.1em; text-transform:uppercase; }
+
+  /* ── INFO TOAST ── */
+  #toast {
+    position:fixed; top:70px; left:50%; transform:translateX(-50%); z-index:1500;
+    padding:10px 18px; border-radius:4px; backdrop-filter:blur(10px);
+    font-family:'Share Tech Mono',monospace; font-size:12px; letter-spacing:0.06em;
+    display:none; max-width:480px; text-align:center;
+  }
+  #toast.err  { background:rgba(100,15,15,0.92); border:1px solid var(--red); color:#ffaaaa; }
+  #toast.info { background:rgba(10,50,30,0.92); border:1px solid var(--green); color:#aaffcc; }
+
+  /* ── NO DATA BANNER ── */
+  #no-data-banner {
+    position:fixed; top:70px; left:50%; transform:translateX(-50%); z-index:800;
+    background:rgba(80,50,10,0.9); border:1px solid var(--amber); border-radius:5px;
+    padding:12px 22px;
+    font-family:'Rajdhani',sans-serif; font-size:14px; color:#ffd090; line-height:1.5;
+    backdrop-filter:blur(10px); text-align:center; max-width:560px;
+    display:none;
+  }
+  #no-data-banner a { color:var(--amber); }
+
+  /* Source note */
+  #source-note {
+    position:fixed; bottom:7px; right:20px; z-index:900;
+    font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--text-dim); opacity:0.5;
+  }
+
+  /* Scanlines */
+  body::after {
+    content:''; position:fixed; inset:0;
+    background:repeating-linear-gradient(0deg,transparent 0px,transparent 3px,rgba(0,0,0,0.04) 3px,rgba(0,0,0,0.04) 4px);
+    pointer-events:none; z-index:800;
+  }
+  .leaflet-control-scale-line { background:var(--bg-glass); border-color:var(--border-bright); color:var(--text-dim); font-family:'Share Tech Mono',monospace; font-size:9px; backdrop-filter:blur(8px); }
+</style>
+</head>
+<body>
+
+<!-- Loading Overlay -->
+<div id="overlay">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:14px;width:280px;">
+    <div class="loader-flag"></div>
+    <div class="loader-title">Ukraine War Map</div>
+    <div class="loader-bar-track"><div class="loader-bar-fill" id="loader-bar"></div></div>
+    <div class="loader-status" id="loader-status">Initializing…</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- No data banner -->
+<div id="no-data-banner">
+  ⚠️ No frontline data found in <code>data/frontline.geojson</code>.<br>
+  Run the <strong>GitHub Action</strong> manually to fetch initial data:<br>
+  <a href="../../actions/workflows/update-frontline.yml" target="_blank">Actions → Update Frontline Data → Run workflow</a>
+</div>
+
+<!-- Header -->
+<div id="header">
+  <div class="header-left">
+    <div class="flag-badge"></div>
+    <div>
+      <div class="header-title">Ukraine War Map — <span>Live Frontline</span></div>
+      <div class="header-subtitle">OSINT · cyterat/deepstate-map-data · Daily updates via GitHub Actions</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div id="countdown"></div>
+    <button id="refresh-btn" onclick="loadFrontline()">↺ Refresh</button>
+    <div class="status-pill">
+      <div class="pulse-dot" id="status-dot"></div>
+      <span id="status-text">Loading</span>
+    </div>
+    <div id="update-time">--:--</div>
+  </div>
+</div>
+
+<!-- Map -->
+<div id="map"></div>
+
+<!-- Legend -->
+<div class="panel" id="legend">
+  <div class="panel-title">Map Legend</div>
+  <div class="legend-item"><div class="legend-swatch sw-occupied"></div>Russian-controlled territory</div>
+  <div class="legend-item"><div class="legend-swatch sw-ua"></div>Ukraine — free territory</div>
+  <div class="legend-item"><div class="legend-line ln-front"></div>Active frontline</div>
+  <div class="legend-item"><div class="legend-line ln-border"></div>International border</div>
+</div>
+
+<!-- Stats -->
+<div class="panel" id="stats">
+  <div class="panel-title">War Statistics</div>
+  <div class="stat-row"><span class="stat-label">Day of War</span><span class="stat-value sv-amber" id="stat-day">—</span></div>
+  <div class="stat-row"><span class="stat-label">Occupied (est.)</span><span class="stat-value sv-red" id="stat-occ">—</span></div>
+  <div class="stat-row"><span class="stat-label">RU Losses (est.)</span><span class="stat-value sv-red" id="stat-losses">—</span></div>
+  <div class="stat-row"><span class="stat-label">Data date</span><span class="stat-value sv-green" id="stat-date">—</span></div>
+  <div class="stat-row"><span class="stat-label">Source</span><span class="stat-value" style="font-size:10px;color:#3ea87a;">DeepStateMap/cyterat</span></div>
+</div>
+
+<div id="source-note">data: cyterat/deepstate-map-data · deepstatemap.live · github-actions daily</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const WAR_START = new Date('2022-02-24T00:00:00Z');
+let map, occupiedLayer = null;
+let refreshTimer = null;
+const REFRESH_MS = 60 * 60 * 1000; // 1 hour (data updates daily anyway)
+
+// ── UI helpers ──────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+function setLoader(pct, msg) {
+  $('loader-bar').style.width = pct + '%';
+  $('loader-status').textContent = msg;
+}
+function hideOverlay() {
+  const o = $('overlay');
+  o.classList.add('hidden');
+  setTimeout(() => o.style.display = 'none', 600);
+}
+function toast(msg, type = 'err') {
+  const t = $('toast');
+  t.className = type;
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 7000);
+}
+function setStatus(s) {
+  const dot = $('status-dot'), txt = $('status-text');
+  dot.className = 'pulse-dot';
+  if (s === 'loading') { dot.classList.add('loading'); txt.textContent = 'Updating'; }
+  else if (s === 'ok')  { txt.textContent = 'Live'; }
+  else                  { dot.classList.add('error'); txt.textContent = 'Error'; }
+}
+
+// ── MAP INIT ─────────────────────────────────────────────────────────────────
+function initMap() {
+  map = L.map('map', { center: [48.8, 32.5], zoom: 6, zoomControl: false, attributionControl: false });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, subdomains: 'abcd' }).addTo(map);
+  L.control.zoom({ position: 'topright' }).addTo(map);
+  L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map);
+  L.control.attribution({ position: 'bottomleft', prefix: false })
+    .addAttribution('© <a href="https://carto.com" style="color:#2ec882">CARTO</a> · <a href="https://deepstatemap.live" style="color:#2ec882">DeepStateMap</a>')
+    .addTo(map);
+}
+
+// ── STATS ────────────────────────────────────────────────────────────────────
+function updateWarDay() {
+  const day = Math.floor((Date.now() - WAR_START) / 86400000);
+  $('stat-day').textContent = `Day ${day.toLocaleString('cs-CZ')}`;
+}
+
+// Rough occupied area calculation from GeoJSON polygon area (Haversine-based shoelace)
+function estimateOccupiedKm2(features) {
+  let total = 0;
+  features.forEach(f => {
+    const geom = f.geometry;
+    if (!geom) return;
+    const rings = geom.type === 'Polygon' ? [geom.coordinates[0]] :
+                  geom.type === 'MultiPolygon' ? geom.coordinates.map(p => p[0]) : [];
+    rings.forEach(ring => {
+      let area = 0;
+      const n = ring.length;
+      for (let i = 0; i < n; i++) {
+        const [x1, y1] = ring[i];
+        const [x2, y2] = ring[(i + 1) % n];
+        area += (x2 - x1) * (y2 + y1);
+      }
+      // Rough conversion: 1 deg² ≈ 111.32km × cos(lat) × 111.32km
+      const avgLat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
+      const cos = Math.cos(avgLat * Math.PI / 180);
+      total += Math.abs(area) / 2 * 111.32 * 111.32 * cos;
+    });
+  });
+  return Math.round(total);
+}
+
+// ── RENDER GEOJSON ────────────────────────────────────────────────────────────
+function renderFrontline(data) {
+  if (occupiedLayer) { map.removeLayer(occupiedLayer); occupiedLayer = null; }
+
+  const features = (data.features || []).filter(f =>
+    f.geometry?.type === 'Polygon' || f.geometry?.type === 'MultiPolygon'
+  );
+
+  if (features.length === 0) {
+    $('no-data-banner').style.display = 'block';
+    $('stat-occ').textContent = 'No data';
+    return;
+  }
+
+  $('no-data-banner').style.display = 'none';
+
+  occupiedLayer = L.geoJSON(
+    { type: 'FeatureCollection', features },
+    {
+      style: () => ({
+        fillColor: '#c02020',
+        fillOpacity: 0.42,
+        color: '#e84040',
+        weight: 1.5,
+        opacity: 0.8
+      }),
+      onEachFeature: (feature, layer) => {
+        const name = feature.properties?.name || feature.properties?.date || 'Occupied territory';
+        layer.bindTooltip(
+          `<span style="font-family:'Rajdhani',sans-serif;font-size:13px;color:#ffcccc;">${name}</span>`,
+          { sticky: true }
+        );
+      }
+    }
+  ).addTo(map);
+
+  // Stats
+  const km2 = estimateOccupiedKm2(features);
+  const pct = ((km2 / 603628) * 100).toFixed(1);
+  $('stat-occ').textContent = `~${pct}% (${Math.round(km2/1000)}k km²)`;
+  $('stat-losses').textContent = '~900,000+ est.';
+}
+
+// ── LOAD DATA ─────────────────────────────────────────────────────────────────
+async function loadFrontline(isInit = false) {
+  setStatus('loading');
+  if (isInit) setLoader(40, 'Loading frontline data…');
+
+  try {
+    // Load meta first for date info
+    const metaRes = await fetch('data/meta.json?_=' + Date.now());
+    if (metaRes.ok) {
+      const meta = await metaRes.json();
+      if (meta.fetched_date && meta.fetched_date !== 'pending') {
+        $('stat-date').textContent = meta.fetched_date;
+        $('update-time').textContent = meta.fetched_date;
+      }
+    }
+
+    if (isInit) setLoader(65, 'Parsing GeoJSON…');
+
+    const res = await fetch('data/frontline.geojson?_=' + Date.now());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (isInit) setLoader(85, 'Rendering map layers…');
+
+    // Check if placeholder
+    if (!data.features || data.features.length === 0) {
+      $('no-data-banner').style.display = 'block';
+      setStatus('error');
+      if (isInit) { setLoader(100, 'No data — run GitHub Action'); setTimeout(hideOverlay, 800); }
+      return;
+    }
+
+    renderFrontline(data);
+    setStatus('ok');
+
+    if (isInit) { setLoader(100, 'Done'); setTimeout(hideOverlay, 400); }
+    else        { toast('Map updated ✓', 'info'); }
+
+  } catch (err) {
+    console.error(err);
+    setStatus('error');
+    if (isInit) {
+      setLoader(100, 'Load failed');
+      setTimeout(hideOverlay, 800);
+      $('no-data-banner').style.display = 'block';
+    } else {
+      toast('Could not refresh data: ' + err.message);
+    }
+  }
+}
+
+// ── COUNTDOWN ─────────────────────────────────────────────────────────────────
+function startCountdown() {
+  let next = Date.now() + REFRESH_MS;
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => {
+    const rem = Math.max(0, next - Date.now());
+    const h = Math.floor(rem / 3600000);
+    const m = Math.floor((rem % 3600000) / 60000);
+    const s = Math.floor((rem % 60000) / 1000);
+    $('countdown').textContent = `Refresh in ${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    if (rem <= 500) { loadFrontline(); next = Date.now() + REFRESH_MS; }
+  }, 1000);
+}
+
+// ── BOOT ──────────────────────────────────────────────────────────────────────
+(async () => {
+  setLoader(10, 'Initializing map engine…');
+  initMap();
+  updateWarDay();
+  setInterval(updateWarDay, 60000);
+  await new Promise(r => setTimeout(r, 150));
+  await loadFrontline(true);
+  startCountdown();
+})();
+</script>
+</body>
+</html>
