@@ -2,7 +2,7 @@ name: Update Frontline Data
 
 on:
   schedule:
-    # Every day at 04:30 UTC (after cyterat updates at 03:00 UTC)
+    # Every day at 04:30 UTC
     - cron: '30 4 * * *'
   workflow_dispatch: # Allow manual trigger
 
@@ -19,16 +19,16 @@ jobs:
       - name: Fetch latest frontline GeoJSON
         run: |
           set -e
-          TODAY=$(date -u +%Y-%m-%d)
-          YESTERDAY=$(date -u -d "yesterday" +%Y-%m-%d)
-
           BASE="https://raw.githubusercontent.com/cyterat/deepstate-map-data/main/data"
-
-          # Try today's file first, then yesterday's
-          for DATE in "$TODAY" "$YESTERDAY"; do
+          
+          # This loop checks the last 7 days for the most recent available file
+          for i in {0..7}; do
+            DATE=$(date -u -d "$i days ago" +%Y-%m-%d)
             URL="${BASE}/deepstatemap_data_${DATE}.geojson"
-            echo "Trying: $URL"
+            echo "Checking: $URL"
+            
             HTTP_CODE=$(curl -s -o /tmp/frontline_new.geojson -w "%{http_code}" "$URL")
+            
             if [ "$HTTP_CODE" = "200" ]; then
               echo "Success: fetched data for $DATE"
               echo "{\"fetched_date\": \"$DATE\", \"source\": \"cyterat/deepstate-map-data\", \"updated_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > data/meta.json
@@ -39,17 +39,20 @@ jobs:
             fi
           done
 
-          if [ ! -f data/frontline.geojson ]; then
-            echo "ERROR: Could not fetch any GeoJSON"
+          if [ ! -s data/frontline.geojson ]; then
+            echo "ERROR: Could not fetch any valid GeoJSON in the last 7 days"
             exit 1
           fi
-
-          echo "File size: $(wc -c < data/frontline.geojson) bytes"
 
       - name: Commit updated data
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/frontline.geojson data/meta.json
-          git diff --staged --quiet || git commit -m "chore: update frontline data $(date -u +%Y-%m-%d)"
-          git push
+          # Only commit and push if there are actual changes to the data
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update frontline data $(date -u +%Y-%m-%d)"
+            git push
+          else
+            echo "No changes detected in data."
+          fi
