@@ -118,7 +118,13 @@
 
     .credit:hover { color: #fff; }
     @media (max-width: 600px) {
-      .artwork-outer img { object-fit: cover; }
+      .artwork-outer { align-items: center; }
+      .artwork-outer img {
+        object-fit: unset;
+        width: 100%;
+        height: auto;
+        position: static;
+      }
     }
   </style>
 </head>
