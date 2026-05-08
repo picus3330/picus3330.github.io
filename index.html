@@ -1,173 +1,166 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="cs">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>IN THE BOOTH — 5.6.2026</title>
   <style>
-    *, *::before, *::after {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #000;
+      --fg: #fff;
+      --dim: rgba(255,255,255,0.28);
     }
 
     body {
-      background: #000;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: Arial, sans-serif;
+      overflow-x: hidden;
     }
 
-    /* ── Image frame ─────────────────────────────────────── */
-
-    .frame {
+    /* ════════════════════
+       HERO
+    ════════════════════ */
+    .hero {
+      height: 100vh;
       position: relative;
-      display: inline-block; /* shrinks to exact rendered image size */
-      max-width: 100%;
-      line-height: 0;        /* no phantom gap below image */
+      background: #000;
+      overflow: hidden;
     }
 
-    .frame img {
-      display: block;
-      max-width: 100%;
-      height: auto;
-    }
-
-    /* ── Countdown overlay ───────────────────────────────── */
-
-    .countdown {
+    .artwork-outer {
       position: absolute;
-      top: 68%;
+      inset: 0;
+    }
+
+    .artwork-outer img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .twitch-btn {
+      position: absolute;
+      bottom: 2rem;
       left: 50%;
-      transform: translate(-50%, -50%);
-      display: flex;
-      align-items: flex-start;
-      gap: clamp(12px, 2.2vw, 30px);
-      color: #000000;
-      font-family: Arial;
-      font-weight: 500;
-      pointer-events: none;
-      -webkit-font-smoothing: antialiased;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.6rem 1.4rem;
+      background: #fff;
+      color: #000;
+      text-decoration: none;
+      font-family: Arial, sans-serif;
+      font-size: clamp(0.65rem, 2vw, 0.85rem);
+      font-weight: 400;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      transition: background 0.15s, color 0.15s;
       white-space: nowrap;
     }
 
-    .cd-unit {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
+    .twitch-btn:hover {
+      background: #9b5de5;
+      color: #fff;
     }
 
-    .cd-num {
-      font-size: clamp(22px, 1.8vw, 50px);
-      font-weight: 300;
-      line-height: 1;
-      letter-spacing: 0.04em;
+    .twitch-btn svg {
+      width: 14px; height: 14px;
+      fill: currentColor;
+      flex-shrink: 0;
     }
 
-    .cd-label {
-      font-size: clamp(5px, 0.6vw, 8px);
-      font-weight: 300;
-      letter-spacing: 0.2em;
-      opacity: 0.55;
+    /* ════════════════════
+       FOTO — každá zabere
+       celou výšku viewportu
+    ════════════════════ */
+    .photo-section {
+      height: 100vh;
+      position: relative;
+      overflow: hidden;
+      background: #000;
     }
 
-    @keyframes livePulse {
-      0%, 100% { opacity: 1;    }
-      50%       { opacity: 0.2; }
-    }
-
-    .live-now {
-      font-size: clamp(14px, 2vw, 22px);
-      font-weight: 300;
-      letter-spacing: 0.15em;
-      animation: livePulse 2.5s ease-in-out infinite;
-    }
-
-    /* ── Invisible hotspot links ─────────────────────────── */
-
-    .hotspot {
+    .photo-bg {
       position: absolute;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      display: block;
-      cursor: default;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
     }
 
-    .hotspot:hover {
-      cursor: pointer;
+    /* ════════════════════
+       KONEC / CREDIT
+    ════════════════════ */
+    .end-section {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
     }
 
-    .hotspot-twitch {
-      top:    76%;
-      width:  22%;
-      height: 5%;
+    .credit {
+      font-size: clamp(0.6rem, 1.8vw, 0.75rem);
+      font-weight: 400;
+      letter-spacing: 0.12em;
+      color: var(--dim);
+      text-decoration: none;
+      text-transform: lowercase;
+      transition: color 0.2s;
+      font-family: Arial, sans-serif;
     }
 
-    .hotspot-insta {
-      top:    98.5%;
-      width:  16%;
-      height: 3%;
-    }
+    .credit:hover { color: #fff; }
   </style>
 </head>
 <body>
 
-<div class="frame">
+  <!-- ══ HERO ══ -->
+  <section class="hero">
+    <div class="artwork-outer">
+      <img src="Artboard_1.png" alt="In The Booth artwork" />
+    </div>
+    <a class="twitch-btn" href="https://twitch.tv/lifeondem08" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>
+      twitch.tv/lifeondem08
+    </a>
+  </section>
 
-  <img src="Artboard%201.png" alt="In The Booth — 5.6.2026">
+  <!-- ══ FOTKY ══
+       Přidej nebo odeber <section class="photo-section"> bloky podle potřeby.
+       Každá fotka = jedna sekce. Stránka se automaticky prodlouží.
+  ══ -->
+  <section class="photo-section">
+    <div class="photo-bg" style="background-image: url('photos/01.jpg')"></div>
+  </section>
 
-  <!-- Countdown timer -->
-  <div class="countdown" id="countdown"></div>
+  <section class="photo-section">
+    <div class="photo-bg" style="background-image: url('photos/02.jpg')"></div>
+  </section>
 
-  <!-- Twitch hotspot -->
-  <a class="hotspot hotspot-twitch"
-     href="https://twitch.tv/lifeondem08"
-     target="_blank"
-     rel="noopener noreferrer"
-     aria-label="Twitch: lifeondem08"></a>
+  <section class="photo-section">
+    <div class="photo-bg" style="background-image: url('photos/03.jpg')"></div>
+  </section>
 
-  <!-- Instagram hotspot -->
-  <a class="hotspot hotspot-insta"
-     href="https://instagram.com/spendingmoreonmysafety/"
-     target="_blank"
-     rel="noopener noreferrer"
-     aria-label="Instagram: @spendingmoreonmysafety"></a>
+  <!-- přidej další fotky sem: -->
+  <!--
+  <section class="photo-section">
+    <div class="photo-bg" style="background-image: url('photos/04.jpg')"></div>
+  </section>
+  -->
 
-</div>
-
-<script>
-  // June 5 2026, midnight local time (month index 5 = June)
-  const EVENT = new Date(2026, 5, 5, 0, 0, 0);
-
-  function pad(n)        { return String(n).padStart(2, '0'); }
-  function unit(n, lbl)  { return `<div class="cd-unit"><span class="cd-num">${n}</span><span class="cd-label">${lbl}</span></div>`; }
-
-  function tick() {
-    const diff = EVENT - Date.now();
-    const el   = document.getElementById('countdown');
-
-    if (diff <= 0) {
-      el.innerHTML = '<span class="live-now">LIVE NOW</span>';
-      return;
-    }
-
-    const d = Math.floor(diff / 86400000);
-    const h = Math.floor(diff % 86400000 / 3600000);
-    const m = Math.floor(diff % 3600000  / 60000);
-    const s = Math.floor(diff % 60000    / 1000);
-
-    el.innerHTML =
-      unit(pad(d), '') +
-      unit(pad(h), '')  +
-      unit(pad(m), '')  +
-      unit(pad(s), '');
-  }
-
-  tick();
-  setInterval(tick, 1000);
-</script>
+  <!-- ══ CREDIT ══ -->
+  <section class="end-section">
+    <a class="credit" href="https://instagram.com/spendingmoreonmysafety/" target="_blank" rel="noopener">
+      @spendingmoreonmysafety
+    </a>
+  </section>
 
 </body>
 </html>
